@@ -1,13 +1,17 @@
 /* ============================================================
    APP SHELL LAYOUT
-   The main regions of the page: board area, player dock, side
-   panel (preview/zoom/log), and the vertical action rail.
+   The main regions of the page: a horizontal top bar (phase
+   tracker + Log/Turn Actions buttons), and below it the board
+   area (player dock, board, side panel).
+
+   The old always-visible vertical action rail and game-log panel
+   were replaced with floating popups (see "POPUPS" below) so the
+   board/dock/side-panel get that space instead.
 
    This is a desktop/laptop browser layout (not a mobile layout —
    the game is not designed to be played on phones/tablets). The
    goal here is that it survives normal desktop window resizing
-   without clipping content, unlike the original fixed 1600x900
-   itch.io-only layout.
+   without clipping OR needing scrollbars in ordinary use.
    ============================================================ */
 
 #game-container {
@@ -16,7 +20,116 @@
     height: 100%;
 }
 
-/* TOP: Board Area - fills everything except the fixed action bar */
+/* ---------- Top bar: horizontal phase tracker + buttons ---------- */
+#top-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 8px 20px;
+    background: linear-gradient(to right, #161616, var(--red-dark));
+    border-bottom: 2px solid var(--gold);
+}
+
+#phase-tracker-h {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1;
+    min-width: 0;
+}
+
+.phase-tracker-turn-label {
+    font-family: 'Cinzel', serif;
+    color: var(--gold);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.phase-tracker-steps {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.phase-step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.phase-step.is-current {
+    opacity: 1;
+}
+
+.phase-step.is-done {
+    opacity: 0.75;
+}
+
+.phase-step-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: bold;
+    color: var(--gold);
+    background: transparent;
+}
+
+.phase-step.is-done .phase-step-dot {
+    background: var(--gold);
+    color: #1a1a1a;
+}
+
+.phase-step.is-current .phase-step-dot {
+    box-shadow: 0 0 8px var(--gold);
+    animation: location-pulse 2s infinite;
+}
+
+.phase-step-label {
+    font-size: 0.72rem;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.02em;
+    color: var(--text-light);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.phase-step-connector {
+    width: 24px;
+    height: 2px;
+    background: rgba(212, 175, 55, 0.3);
+}
+
+#top-bar-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.top-bar-btn {
+    margin: 0;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.top-bar-btn.has-attention {
+    animation: ai-thinking-pulse 1.4s ease-in-out infinite;
+    box-shadow: 0 0 10px var(--gold);
+}
+
+/* ---------- Board Area ---------- */
 #board-area {
     flex: 1;
     min-height: 0;
@@ -28,14 +141,12 @@
     overflow: hidden;
 }
 
-/* Player Dock (left panel) */
+/* Player Dock (left panel) — widened now that the action rail and log
+   panel no longer compete for horizontal space. */
 #player-dock {
-    /* Was a fixed 350px; now scales between a usable minimum and a
-       sensible maximum so it doesn't starve the board on smaller
-       desktop windows. */
-    flex: 1 1 clamp(220px, 20vw, 350px);
-    min-width: 220px;
-    max-width: 350px;
+    flex: 1 1 clamp(240px, 22vw, 400px);
+    min-width: 240px;
+    max-width: 400px;
     height: 100%;
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid #333;
@@ -80,14 +191,15 @@
     display: none;
 }
 
-/* Side Panel: contains card preview, board zoom, and the game log */
+/* Side Panel: card preview + board zoom. Widened for the same reason
+   as the player dock above. */
 #side-panel {
     display: flex;
     flex-direction: column;
     gap: 15px;
-    flex: 0 1 clamp(260px, 18vw, 350px);
-    min-width: 260px;
-    max-width: 350px;
+    flex: 0 1 clamp(280px, 20vw, 400px);
+    min-width: 280px;
+    max-width: 400px;
     height: 100%;
     flex-shrink: 1;
 }
@@ -105,11 +217,12 @@
     color: #666;
     font-size: 0.8rem;
     min-height: 300px;
+    flex: 1;
 }
 
 #card-preview img {
     width: 100%;
-    max-width: 285px;
+    max-width: 320px;
     border-radius: 6px;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.9);
 }
@@ -128,7 +241,7 @@
 
 #board-zoom-content {
     width: 100%;
-    max-width: 270px;
+    max-width: 320px;
     aspect-ratio: 1 / 1;
     overflow: hidden;
     position: relative;
@@ -148,36 +261,86 @@
     /* Shown on hover via JS */
 }
 
-#game-log-container {
-    flex: 1;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid #444;
-    border-radius: 8px;
-    display: flex;
+/* ---------- Popups: Turn Actions + Game Log ----------
+   Shared floating-panel look for content that used to live in the
+   always-visible action rail / log panel. Deliberately positioned
+   BELOW the choice-overlay / themed-dialog z-index (9999/10000) so a
+   pendingChoice or Dialogs.* modal naturally covers these rather than
+   needing extra state to coordinate who's on top. */
+.side-popup {
+    display: none;
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    width: 320px;
+    max-height: min(70vh, 560px);
+    background: #1a1a1a;
+    border: 2px solid var(--gold);
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    z-index: 500;
     flex-direction: column;
-    padding: 10px;
     overflow: hidden;
-    min-height: 0;
 }
 
-#game-log-container h3 {
-    font-size: 1rem;
-    margin-bottom: 8px;
+.side-popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
     border-bottom: 1px solid #333;
-    padding-bottom: 4px;
+    background: rgba(212, 175, 55, 0.08);
+}
+
+.side-popup-header h3 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.side-popup-close {
+    margin: 0;
+    padding: 2px 8px;
+    background: transparent;
+    color: var(--text-light);
+    font-size: 1rem;
+    box-shadow: none;
+}
+
+.side-popup-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+}
+
+.side-popup-body {
+    padding: 14px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+#turn-actions-popup-body p {
+    margin: 0 0 12px 0;
+    color: #ccc;
+    font-size: 0.95rem;
+}
+
+#turn-actions-popup-body button {
+    width: 100%;
+    margin: 0;
+}
+
+/* Game log popup re-uses the existing #game-log rendering target and
+   .log-entry styling, just inside a popup body instead of a fixed panel. */
+.log-popup .side-popup-body {
+    padding: 10px;
 }
 
 #game-log {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    font-size: 0.85rem;
-    line-height: 1.4;
-    color: #ccc;
     display: flex;
     flex-direction: column;
     gap: 4px;
-    min-height: 0;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #ccc;
     word-wrap: break-word;
 }
 
@@ -195,114 +358,6 @@
     background: rgba(212, 175, 55, 0.1);
 }
 
-/* Vertical Action Area (Sidebar) */
-#action-area {
-    flex: 0 0 clamp(160px, 12vw, 200px);
-    padding: 15px;
-    background: linear-gradient(to right, var(--red-dark), #111);
-    border-left: 2px solid var(--gold);
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 20px;
-    overflow-y: hidden;
-}
-
-#action-area h1#phase-title {
-    font-size: 1.2rem;
-    margin: 0;
-    text-align: center;
-}
-
-/* Turn phase tracker — the 3 phases the engine actually models
-   (Activate / Place & Collect / Turn-in). "Place & Collect" reflects that
-   the code resolves the location's reward immediately on placement, rather
-   than as a separate step, even though the rulebook lists them as steps
-   2 and 3. */
-#phase-tracker {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    width: 100%;
-}
-
-.phase-step {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 2px;
-    opacity: 0.4;
-    transition: opacity 0.2s;
-}
-
-.phase-step.is-current {
-    opacity: 1;
-}
-
-.phase-step.is-done {
-    opacity: 0.75;
-}
-
-.phase-step-dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 2px solid var(--gold);
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.6rem;
-    font-weight: bold;
-    color: var(--gold);
-    background: transparent;
-}
-
-.phase-step.is-done .phase-step-dot {
-    background: var(--gold);
-    color: #1a1a1a;
-}
-
-.phase-step.is-current .phase-step-dot {
-    box-shadow: 0 0 8px var(--gold);
-    animation: location-pulse 2s infinite;
-}
-
-.phase-step-label {
-    font-size: 0.72rem;
-    font-family: 'Cinzel', serif;
-    letter-spacing: 0.02em;
-    color: var(--text-light);
-    text-transform: uppercase;
-}
-
-.phase-step-connector {
-    width: 2px;
-    height: 10px;
-    background: rgba(212, 175, 55, 0.3);
-    margin-left: 9px;
-}
-
-#action-area p#phase-instruction {
-    font-size: 0.9rem;
-    margin: 0;
-    text-align: center;
-    color: #ccc;
-}
-
-#action-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
-}
-
-#action-controls button {
-    margin: 0;
-}
-
 .ai-turn-indicator {
     color: var(--gold);
     font-style: italic;
@@ -312,8 +367,63 @@
 }
 
 @keyframes ai-thinking-pulse {
-    0%, 100% { opacity: 0.6; }
-    50% { opacity: 1; }
+
+    0%,
+    100% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* ---------- Setup panel (pre-game) ----------
+   Shown as a centered overlay while GameState.turn.phase === 'setup',
+   replacing the old always-present setup buttons in the action rail. */
+#setup-panel {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    background: rgba(0, 0, 0, 0.75);
+    align-items: center;
+    justify-content: center;
+}
+
+.setup-panel-card {
+    background: #1a1a1a;
+    border: 2px solid var(--gold);
+    border-radius: 12px;
+    padding: 32px 36px;
+    text-align: center;
+    box-shadow: 0 0 40px rgba(212, 175, 55, 0.3);
+    max-width: 420px;
+}
+
+.setup-panel-card h1 {
+    font-size: 1.5rem;
+    margin-bottom: 6px;
+}
+
+.setup-panel-card>p {
+    color: #ccc;
+    margin-top: 0;
+}
+
+.setup-group {
+    text-align: left;
+    margin-top: 16px;
+}
+
+.setup-group h3 {
+    font-size: 0.85rem;
+    margin: 0 0 8px 0;
+    text-align: center;
+}
+
+.setup-group button {
+    width: 100%;
 }
 
 /* Initial setup screen (player count / AI opponents) */
@@ -473,37 +583,33 @@
 /* ============================================================
    RESPONSIVE — desktop/laptop browser widths only.
    This game targets desktop web browsers; these rules exist so a
-   resized or smaller laptop browser window degrades gracefully
-   instead of clipping content, not to support phone/tablet layouts.
+   resized or smaller laptop browser window degrades gracefully.
+   With the action rail and log panel gone, the remaining 2 columns
+   (dock + side panel) plus the board's own fluid min()-based sizing
+   (see css/board.css #locations-area) should keep ordinary window
+   resizing scrollbar-free without needing a wide fallback range here.
    ============================================================ */
 
-/* Compact desktop / small laptop windows */
-@media (max-width: 1400px) {
+@media (max-width: 1100px) {
     #board-area {
         gap: 10px;
         padding: 10px;
     }
 
     #player-dock {
-        flex-basis: 200px;
-        min-width: 200px;
+        flex-basis: 210px;
+        min-width: 210px;
     }
 
     #side-panel {
-        flex-basis: 220px;
-        min-width: 220px;
-    }
-
-    #action-area {
-        flex-basis: 150px;
-        padding: 10px;
+        flex-basis: 230px;
+        min-width: 230px;
     }
 }
 
-/* Narrow desktop windows: let the shell scroll horizontally rather
-   than silently clipping content (previously body had overflow:hidden
-   with no fallback at all). */
-@media (max-width: 1150px) {
+/* True last-resort fallback: only if a window is narrower than this
+   does the shell scroll horizontally rather than clip. */
+@media (max-width: 760px) {
     body {
         overflow: auto;
     }

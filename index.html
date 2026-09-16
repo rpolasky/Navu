@@ -17,6 +17,17 @@
 
 <body>
     <div id="game-container">
+        <!-- Top bar: horizontal phase tracker + Log / Turn Actions buttons.
+             Replaces the old vertical action rail and always-visible log panel,
+             so the board/dock/side-panel below get the freed-up space. -->
+        <div id="top-bar">
+            <div id="phase-tracker-h"></div>
+            <div id="top-bar-actions">
+                <button id="btn-open-log" class="top-bar-btn" onclick="window.gameUI.toggleLogPopup()">📜 Log</button>
+                <button id="btn-open-turn-actions" class="top-bar-btn" onclick="window.gameUI.toggleTurnActionsPopup()">▶ Turn Actions</button>
+            </div>
+        </div>
+
         <!-- Top Board Area -->
         <div id="board-area">
             <div id="player-dock">
@@ -39,13 +50,13 @@
                 <div class="location" id="loc-influence"></div>
                 <div class="location" id="loc-blacksmith"></div>
                 <div class="location" id="loc-armory"></div>
-                <!-- Influence track - lower left of board -->
-                <div id="influence-track" style="position:absolute; bottom:5%; left:2%; width:39%; height:10%;
-                            display:flex; align-items:center; gap:4px; z-index:20; padding:2px;">
+                <!-- Influence & Strength track disc overlays (cover the full board;
+                     children are positioned with percentages relative to it, same as
+                     .location/.hex-segment/.commander). pointer-events:none so they
+                     never block clicks on the board underneath. -->
+                <div id="influence-track" style="position:absolute; inset:0; z-index:22; pointer-events:none;">
                 </div>
-                <!-- Strength track - lower right of board -->
-                <div id="strength-track" style="position:absolute; bottom:5%; right:2%; width:30%; height:10%;
-                            display:flex; align-items:center; gap:4px; z-index:20; padding:2px;">
+                <div id="strength-track" style="position:absolute; inset:0; z-index:22; pointer-events:none;">
                 </div>
             </div>
 
@@ -72,41 +83,6 @@
                         <img id="board-zoom-image" src="assets/images/board/FINAL_NAVU_BOARD.png" alt="Zoomed Board">
                     </div>
                 </div>
-            </div>
-
-            <!-- Vertical Action Area -->
-            <div id="action-area">
-                <div id="phase-tracker"></div>
-                <h1 id="phase-title">Game Setup</h1>
-                <p id="phase-instruction">Select the number of players to begin.</p>
-                <div id="action-controls">
-                    <div class="setup-group">
-                        <h3>Player Options</h3>
-                        <button id="btn-start" onclick="window.gameEngine.startGame(2)">Start 2 Player (Human)</button>
-                        <button id="btn-start-3" onclick="window.gameEngine.startGame(3)">Start 3 Player (Human)</button>
-                    </div>
-                    <div class="setup-group setup-group-ai">
-                        <h3>Single Player Mode</h3>
-                        <div class="setup-ai-select-row">
-                            <label for="ai-count">AI Opponents:</label>
-                            <select id="ai-count">
-                                <option value="1">1 AI</option>
-                                <option value="2">2 AIs</option>
-                                <option value="3">3 AIs</option>
-                                <option value="4">4 AIs</option>
-                            </select>
-                        </div>
-                        <button id="btn-start-ai" class="btn-start-ai"
-                            onclick="const count = parseInt(document.getElementById('ai-count').value); window.gameEngine.startGame(1, count)">Start
-                            Single Player</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Moved Game Log -->
-            <div id="game-log-container">
-                <h3>Game Log</h3>
-                <div id="game-log"></div>
             </div>
         </div>
 

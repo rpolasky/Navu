@@ -48,14 +48,35 @@
 
 .selectable-card {
     cursor: pointer;
-    animation: gold-pulse 1.5s infinite;
     position: relative;
     z-index: 10;
+    /* Glow only — no transform/scale here. A board-positioned card (see
+       css/board.css .board-market-card) is placed with an inline
+       translate(-50%, -50%), and scaling/animating transform on this class
+       used to silently replace that positioning offset instead of adding to
+       it, making the card visibly jump on hover. Pure box-shadow avoids the
+       whole problem while still giving a clear "you can pick this" glow. */
+    animation: gold-glow-pulse 1.5s infinite;
 }
 
 .selectable-card:hover {
-    transform: scale(1.1) !important;
     z-index: 11;
+    filter: brightness(1.15);
+    box-shadow: 0 0 20px 6px rgba(212, 175, 55, 0.65);
+}
+
+@keyframes gold-glow-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 15px 5px rgba(212, 175, 55, 0.4);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
+    }
 }
 
 /* Raid 'Turn In' Button */

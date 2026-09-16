@@ -13,6 +13,13 @@ const GameUI = {
         return div;
     },
 
+    // Human-readable location name from its id, e.g. 'loc-commandCenter' -> 'Command Center'.
+    // Matches the same formula already used for game-log entries, for consistency.
+    _getLocationDisplayName(locId) {
+        const raw = locId.replace('loc-', '').replace(/([A-Z])/g, ' $1');
+        return raw.charAt(0).toUpperCase() + raw.slice(1);
+    },
+
     // =====================================================================
     renderFullState() {
         this.renderPhaseInfo();
@@ -23,47 +30,27 @@ const GameUI = {
         this.renderMarket();
         this.renderChoiceOverlay();
         this.renderEventLog();
+        this.renderSetupPanel();
+        this.renderTurnActionsPopup();
     },
 
     renderPhaseInfo() {
-        const titleEl = document.getElementById('phase-title');
-        const instEl = document.getElementById('phase-instruction');
-        const trackerEl = document.getElementById('phase-tracker');
-
         if (GameState.turn.phase === 'setup') {
-            titleEl.textContent = 'Game Setup';
+            const trackerEl = document.getElementById('phase-tracker-h');
             if (trackerEl) trackerEl.innerHTML = '';
             return;
         }
-
-        const cp = GameState.players[GameState.turn.currentPlayerIndex];
-        titleEl.textContent = `Round ${GameState.turn.roundCount} – ${cp.name}'s Turn`;
-
         this.renderPhaseTracker(GameState.turn.phase);
-
-        if (cp.isAI) {
-            const phaseNum = ['activate', 'place', 'turnin'].indexOf(GameState.turn.phase) + 1;
-            instEl.textContent = `Phase ${phaseNum}: ${cp.name} (${cp.aiPersonality.name}) is thinking...`;
-            document.getElementById('action-controls').innerHTML = `<p class="ai-turn-indicator">AI is taking its turn...</p>`;
-        } else {
-            const instructions = {
-                activate: 'Phase 1: Activate any Gear Abilities.',
-                place: 'Phase 2: Place your Commander on a Location.',
-                turnin: 'Phase 3: Turn in a Raid Card if requirements are met.'
-            };
-            instEl.textContent = instructions[GameState.turn.phase] || '';
-            document.getElementById('action-controls').innerHTML =
-                `<button id="btn-next-phase" onclick="window.gameEngine.nextPhase()">Next Phase →</button>`;
-        }
     },
 
-    // Small vertical 3-step tracker for the action rail: Activate -> Place & Collect
-    // -> Turn-in, matching the three phases GameState.turn.phase actually cycles
+    // Horizontal 3-step tracker in the top bar: Activate -> Place & Collect ->
+    // Turn-in, matching the three phases GameState.turn.phase actually cycles
     // through (the rulebook's "Collect" step is folded into placement resolution).
     renderPhaseTracker(currentPhase) {
-        const trackerEl = document.getElementById('phase-tracker');
+        const trackerEl = document.getElementById('phase-tracker-h');
         if (!trackerEl) return;
 
+        const cp = GameState.players[GameState.turn.currentPlayerIndex];
         const steps = [
             { id: 'activate', label: 'Activate' },
             { id: 'place', label: 'Place & Collect' },
@@ -71,7 +58,7 @@ const GameUI = {
         ];
         const currentIndex = steps.findIndex(s => s.id === currentPhase);
 
-        trackerEl.innerHTML = steps.map((step, i) => {
+        const stepsHtml = steps.map((step, i) => {
             const state = i < currentIndex ? 'is-done' : (i === currentIndex ? 'is-current' : '');
             const dotContent = i < currentIndex ? '✓' : (i + 1);
             const connector = i < steps.length - 1 ? '<div class="phase-step-connector"></div>' : '';
@@ -83,6 +70,173 @@ const GameUI = {
                 ${connector}
             `;
         }).join('');
+
+        const turnLabel = cp ? `Round ${GameState.turn.roundCount} · ${cp.name}${cp.isAI ? ' (AI)' : ''}` : '';
+
+        trackerEl.innerHTML = `
+            <span class="phase-tracker-turn-label">${turnLabel}</span>
+            <div class="phase-tracker-steps">${stepsHtml}</div>
+        `;
+
+        // Give the "Turn Actions" button a subtle pulse when it's a human's turn
+        // and there's something for them to do (Activate/Place/Turn-in step),
+        // so it's clear where to look without a popup being forced open.
+        const btn = document.getElementById('btn-open-turn-actions');
+        if (btn) {
+            const needsAttention = cp && !cp.isAI && !GameState.turn.pendingChoice;
+            btn.classList.toggle('has-attention', !!needsAttention);
+        }
+    },
+
+    // =====================================================================
+    // Setup panel — shown as a centered overlay before a game has started.
+    // Replaces the old always-visible setup buttons in the action rail.
+    // =====================================================================
+    _ensureSetupPanel() {
+        let panel = document.getElementById('setup-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'setup-panel';
+            panel.innerHTML = `
+                <div class="setup-panel-card">
+                    <h1>Navu: Treasures of the Fallen</h1>
+                    <p>Select the number of players to begin.</p>
+                    <div class="setup-group">
+                        <h3>Player Options</h3>
+                        <button onclick="window.gameEngine.startGame(2)">Start 2 Player (Human)</button>
+                        <button onclick="window.gameEngine.startGame(3)">Start 3 Player (Human)</button>
+                    </div>
+                    <div class="setup-group setup-group-ai">
+                        <h3>Single Player Mode</h3>
+                        <div class="setup-ai-select-row">
+                            <label for="ai-count">AI Opponents:</label>
+                            <select id="ai-count">
+                                <option value="1">1 AI</option>
+                                <option value="2">2 AIs</option>
+                                <option value="3">3 AIs</option>
+                                <option value="4">4 AIs</option>
+                            </select>
+                        </div>
+                        <button class="btn-start-ai" onclick="const count = parseInt(document.getElementById('ai-count').value); window.gameEngine.startGame(1, count)">Start Single Player</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(panel);
+        }
+        return panel;
+    },
+
+    renderSetupPanel() {
+        const panel = this._ensureSetupPanel();
+        panel.style.display = (GameState.turn.phase === 'setup') ? 'flex' : 'none';
+    },
+
+    // =====================================================================
+    // Turn Actions popup — replaces the old always-visible vertical action
+    // rail. Shows the current phase's instruction + relevant button(s)
+    // (Next Phase for a human, a thinking indicator for AI). Auto-opens once
+    // per new phase/turn for a human player (as long as no other overlay —
+    // a pendingChoice or Dialogs modal — is already up), and can otherwise
+    // be opened/closed anytime via the top bar button.
+    // =====================================================================
+    _ensureTurnActionsPopup() {
+        let popup = document.getElementById('turn-actions-popup');
+        if (!popup) {
+            popup = document.createElement('div');
+            popup.id = 'turn-actions-popup';
+            popup.className = 'side-popup';
+            popup.innerHTML = `
+                <div class="side-popup-header">
+                    <h3>Turn Actions</h3>
+                    <button class="side-popup-close" onclick="window.gameUI.toggleTurnActionsPopup(false)">✕</button>
+                </div>
+                <div class="side-popup-body" id="turn-actions-popup-body"></div>
+            `;
+            document.body.appendChild(popup);
+        }
+        return popup;
+    },
+
+    toggleTurnActionsPopup(forceState) {
+        const popup = this._ensureTurnActionsPopup();
+        const show = (forceState !== undefined) ? forceState : (popup.style.display !== 'flex');
+        popup.style.display = show ? 'flex' : 'none';
+        if (show) this._fillTurnActionsPopupBody();
+    },
+
+    _fillTurnActionsPopupBody() {
+        const body = document.getElementById('turn-actions-popup-body');
+        if (!body) return;
+        if (GameState.turn.phase === 'setup') {
+            body.innerHTML = '<p>Start a game from the setup screen to begin.</p>';
+            return;
+        }
+        const cp = GameState.players[GameState.turn.currentPlayerIndex];
+        if (!cp) return;
+
+        if (cp.isAI) {
+            body.innerHTML = `<p class="ai-turn-indicator">${cp.name} (${cp.aiPersonality.name}) is thinking...</p>`;
+        } else {
+            const instructions = {
+                activate: 'Activate any Gear Abilities you want to use this turn.',
+                place: 'Place your Commander on a Location.',
+                turnin: 'Turn in a Raid Card if requirements are met.'
+            };
+            body.innerHTML = `
+                <p>${instructions[GameState.turn.phase] || ''}</p>
+                <button id="btn-next-phase" onclick="window.gameEngine.nextPhase()">Next Phase →</button>
+            `;
+        }
+    },
+
+    renderTurnActionsPopup() {
+        const popup = this._ensureTurnActionsPopup();
+        const isOpen = popup.style.display === 'flex';
+        if (isOpen) this._fillTurnActionsPopupBody();
+
+        if (GameState.turn.phase === 'setup') return;
+        const cp = GameState.players[GameState.turn.currentPlayerIndex];
+        if (!cp) return;
+
+        // Auto-open once per new phase/turn for a human, unless a
+        // pendingChoice or themed dialog is already occupying the screen.
+        const phaseKey = `${GameState.turn.currentPlayerIndex}:${GameState.turn.phase}:${GameState.turn.roundCount}`;
+        const overlayBusy = !!GameState.turn.pendingChoice;
+        if (!cp.isAI && !overlayBusy && GameState.turn._lastAutoShownPhaseKey !== phaseKey) {
+            GameState.turn._lastAutoShownPhaseKey = phaseKey;
+            this.toggleTurnActionsPopup(true);
+        }
+    },
+
+    // =====================================================================
+    // Game Log popup — replaces the old always-visible log panel. Re-uses
+    // the existing #game-log id/rendering (renderEventLog) as its content.
+    // =====================================================================
+    _ensureLogPopup() {
+        let popup = document.getElementById('log-popup');
+        if (!popup) {
+            popup = document.createElement('div');
+            popup.id = 'log-popup';
+            popup.className = 'side-popup log-popup';
+            popup.innerHTML = `
+                <div class="side-popup-header">
+                    <h3>Game Log</h3>
+                    <button class="side-popup-close" onclick="window.gameUI.toggleLogPopup(false)">✕</button>
+                </div>
+                <div class="side-popup-body">
+                    <div id="game-log"></div>
+                </div>
+            `;
+            document.body.appendChild(popup);
+        }
+        return popup;
+    },
+
+    toggleLogPopup(forceState) {
+        const popup = this._ensureLogPopup();
+        const show = (forceState !== undefined) ? forceState : (popup.style.display !== 'flex');
+        popup.style.display = show ? 'flex' : 'none';
+        if (show) this.renderEventLog();
     },
 
     // =====================================================================
@@ -103,7 +257,7 @@ const GameUI = {
             if (!canPlace) return;
             const locEl = e.target.closest('.location');
             if (locEl) {
-                window.gameEngine.placeCommander(locEl.id);
+                window.gameEngine.requestCommanderPlacement(locEl.id);
             }
         };
 
@@ -112,7 +266,22 @@ const GameUI = {
             if (locEl) locEl.appendChild(this.makeMeeple(color));
         }
 
+        this.renderFavorDeck();
         this.renderHexGrid();
+    },
+
+    // Small face-down deck visual at the Favors location — see css/board.css
+    // .favor-deck-visual for why this exists (favors have no face-up market
+    // display the way gear/raid/leader do, so nothing was shown there before).
+    renderFavorDeck() {
+        const loc = document.getElementById('loc-favors');
+        if (!loc) return;
+        const deck = document.createElement('div');
+        deck.className = 'favor-deck-visual';
+        const count = (GameState.board.decks && GameState.board.decks.favors) ? GameState.board.decks.favors.length : 0;
+        deck.textContent = count;
+        deck.title = `${count} Favor card${count === 1 ? '' : 's'} remaining`;
+        loc.appendChild(deck);
     },
 
     initBoardZoom() {
@@ -229,12 +398,122 @@ const GameUI = {
         });
     },
 
-    // Track rendering removed – stats are shown in the player dock/cards instead.
-    renderInfluenceTrack() {
-        // Empty as requested
+    // ── Influence track: 5 player rows on the board, each a 13-space (0-12)
+    // zigzag (even positions on the row's lower line, odd on its upper line —
+    // matches the board art exactly, coordinates measured directly from it).
+    // Percentages are relative to #locations-area, same space .location/
+    // .hex-segment/.commander already use.
+    INFLUENCE_TRACK: {
+        baseX: 5.49,   // x of position 0
+        xStep: 1.95,   // x increment per position
+        baseYBottom: 74.14, // y of P1's lower zigzag line (even positions)
+        yZigzag: 1.95,      // how much higher the upper line (odd positions) sits
+        rowStep: 4.76       // y increment from one player's row to the next
     },
+
+    _getInfluencePos(value, playerRowIndex) {
+        const t = this.INFLUENCE_TRACK;
+        const i = Math.max(0, Math.min(12, value)); // track only goes 0-12 (matches the influence cap)
+        const x = t.baseX + i * t.xStep;
+        const yBottom = t.baseYBottom + playerRowIndex * t.rowStep;
+        const y = (i % 2 === 1) ? yBottom - t.yZigzag : yBottom;
+        return { x, y };
+    },
+
+    // ── Strength tree: not a linear track — a branching hex tree that starts
+    // at a single "Start" node, forks into two paths at each of the 7 real
+    // strength thresholds (5/12/18/25/32/38/45; 12 and 38 are single center
+    // nodes where the two paths rejoin), matching checkStrengthThresholds in
+    // engine.js. Coordinates measured directly from the board art.
+    STRENGTH_TREE_NODES: [
+        { value: 0, x: 83.05, y: 73.29 },
+        { value: 5, x: 80.14, y: 75.24 },
+        { value: 5, x: 85.94, y: 75.24 },
+        { value: 12, x: 83.05, y: 76.89 },
+        { value: 18, x: 80.14, y: 78.69 },
+        { value: 18, x: 85.94, y: 78.69 },
+        { value: 25, x: 80.14, y: 81.69 },
+        { value: 25, x: 85.94, y: 81.69 },
+        { value: 32, x: 80.14, y: 84.69 },
+        { value: 32, x: 85.94, y: 84.69 },
+        { value: 38, x: 83.05, y: 86.34 },
+        { value: 45, x: 80.14, y: 88.00 },
+        { value: 45, x: 85.94, y: 88.00 }
+    ],
+
+    // Snaps a strength value down to the highest real checkpoint it has
+    // reached (0 if below 5), then picks a spot among that checkpoint's
+    // node(s) — alternating by player index when a checkpoint has two nodes
+    // (Left/Right), purely so players sharing a tier don't sit on the exact
+    // same node before the small stacking offset in render*Track spreads
+    // same-space discs apart further.
+    _getStrengthPos(strength, playerIndex) {
+        const thresholds = [0, 5, 12, 18, 25, 32, 38, 45];
+        let tier = 0;
+        for (const t of thresholds) { if (strength >= t) tier = t; }
+        const candidates = this.STRENGTH_TREE_NODES.filter(n => n.value === tier);
+        return candidates[playerIndex % candidates.length];
+    },
+
+    // Small fixed offsets (in the same percentage units as the coordinates
+    // above) so discs that land on the exact same space are still all
+    // visible instead of perfectly overlapping.
+    _trackStackOffsets: [
+        { dx: 0, dy: 0 }, { dx: 0.7, dy: -0.5 }, { dx: -0.7, dy: -0.5 },
+        { dx: 0.7, dy: 0.5 }, { dx: -0.7, dy: 0.5 }
+    ],
+
+    _renderTrackDiscs(containerId, positions) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.innerHTML = '';
+
+        // Group players sharing the exact same (x,y) so they can be spread
+        // apart with the small stacking offsets above.
+        const groups = {};
+        positions.forEach((pos, playerIndex) => {
+            if (!pos) return;
+            const key = `${pos.x.toFixed(2)},${pos.y.toFixed(2)}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push({ playerIndex, pos });
+        });
+
+        Object.values(groups).forEach(group => {
+            group.forEach((entry, i) => {
+                const offset = this._trackStackOffsets[i % this._trackStackOffsets.length];
+                const player = GameState.players[entry.playerIndex];
+                const disc = document.createElement('div');
+                disc.className = 'track-disc';
+                disc.style.left = `${entry.pos.x + offset.dx}%`;
+                disc.style.top = `${entry.pos.y + offset.dy}%`;
+                disc.title = player.name;
+                const inner = document.createElement('div');
+                inner.className = 'track-disc-inner';
+                inner.style.background = player.color;
+                disc.appendChild(inner);
+                container.appendChild(disc);
+            });
+        });
+    },
+
+    renderInfluenceTrack() {
+        if (!GameState.players || GameState.players.length === 0) {
+            const container = document.getElementById('influence-track');
+            if (container) container.innerHTML = '';
+            return;
+        }
+        const positions = GameState.players.map((p, i) => this._getInfluencePos(p.influence, i));
+        this._renderTrackDiscs('influence-track', positions);
+    },
+
     renderStrengthTrack() {
-        // Empty as requested
+        if (!GameState.players || GameState.players.length === 0) {
+            const container = document.getElementById('strength-track');
+            if (container) container.innerHTML = '';
+            return;
+        }
+        const positions = GameState.players.map((p, i) => this._getStrengthPos(this._calcStrength(p), i));
+        this._renderTrackDiscs('strength-track', positions);
     },
 
     // =====================================================================
@@ -668,7 +947,20 @@ const GameUI = {
         }
 
         overlay.style.display = 'flex';
-        if (pc.type === 'color') {
+        if (pc.type === 'confirmPlacement') {
+            const { locId, commanderColor } = pc.context;
+            const locName = this._getLocationDisplayName(locId);
+            overlay.innerHTML = `
+                <div class="choice-modal">
+                    <h3>Confirm Placement</h3>
+                    <p>Place your <span class="confirm-placement-color cmd-${commanderColor.toLowerCase()}">${commanderColor}</span> Commander on <strong>${locName}</strong>?</p>
+                    <div class="dialog-btn-row">
+                        <button onclick="window.gameEngine.resolveConfirmPlacement(false)" class="btn-cancel-action">Cancel</button>
+                        <button onclick="window.gameEngine.resolveConfirmPlacement(true)" class="btn-gold">Confirm</button>
+                    </div>
+                </div>
+            `;
+        } else if (pc.type === 'color') {
             overlay.innerHTML = `
                 <div class="choice-modal">
                     <h3>Officer Choice</h3>

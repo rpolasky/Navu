@@ -88,18 +88,42 @@ const Dialogs = {
 
     /**
      * Full end-of-game results panel, replacing the old stacked-string
-     * alert(). `scores` is [{ name, vp }, ...], already sorted winner-first.
+     * alert(). `scores` is [{ name, vp, breakdown }, ...], already sorted
+     * winner-first. `breakdown` is { raids, gear, treasures, theos, endGameBonus }
+     * (see cp.vpBreakdown in engine.js for what each category actually covers).
      */
     showGameOver(scores) {
         const overlay = this._ensureOverlay();
         overlay.style.display = 'flex';
-        const rows = scores.map((s, i) =>
-            `<li class="${i === 0 ? 'winner' : ''}"><span>${s.name}</span><span>${s.vp} VP</span></li>`
-        ).join('');
+
+        const categoryLabels = [
+            { key: 'raids', label: 'Raid Treasures' },
+            { key: 'gear', label: 'Gear Treasures' },
+            { key: 'treasures', label: 'Board Treasures' },
+            { key: 'theos', label: 'Theos Treasures' },
+            { key: 'endGameBonus', label: 'End-Game Bonus Treasures' }
+        ];
+
+        const playerBlocks = scores.map((s, i) => {
+            const b = s.breakdown || {};
+            const rows = categoryLabels.map(c =>
+                `<li><span>${c.label}</span><span>${b[c.key] || 0}</span></li>`
+            ).join('');
+            return `
+                <div class="game-over-player${i === 0 ? ' winner' : ''}">
+                    <div class="game-over-player-header">
+                        <span class="game-over-player-name">${s.name}${i === 0 ? ' 🏆' : ''}</span>
+                        <span class="game-over-player-total">${s.vp} VP</span>
+                    </div>
+                    <ul class="game-over-breakdown">${rows}</ul>
+                </div>
+            `;
+        }).join('');
+
         overlay.innerHTML = `
             <div class="app-dialog game-over">
                 <h3 class="app-dialog-title">Game Over — ${scores[0].name} wins!</h3>
-                <ul class="game-over-scores">${rows}</ul>
+                <div class="game-over-players">${playerBlocks}</div>
                 <div class="app-dialog-actions">
                     <button class="app-dialog-btn primary" data-action="ok">Close</button>
                 </div>

@@ -41,6 +41,16 @@ const GameEngine = {
                 isAI: isAI,
                 influence: 3,
                 vp: 0,
+                // Tracks WHERE a player's final VP came from, purely for the
+                // end-of-game score breakdown popup — cp.vp itself is still the
+                // single running total used everywhere else in the code.
+                vpBreakdown: {
+                    raids: 0,        // raid base VP + in-game bonus objectives, at turn-in
+                    gear: 0,         // gear-passive VP during play (e.g. upgraded Breastplate) + held-gear VP at game end
+                    treasures: 0,    // unspent Treasure tokens converted to VP at game end (1 each)
+                    theos: 0,        // Land of Theos hex-majority VP at game end
+                    endGameBonus: 0  // raid-set end-game bonuses (Royal Slaying, Gearhead, etc.) at game end
+                },
                 strength: 0,
                 resources: {
                     yellow: 1,
@@ -133,9 +143,40 @@ const GameEngine = {
         this.checkAITurn();
     },
 
-    placeCommander(locId) {
+    // Shows a themed confirm popup before actually placing a commander, so a
+    // misclick doesn't lock in an irreversible placement (nothing about game
+    // state changes until the player confirms). Only used by the human UI
+    // click path — AI places directly via placeCommander(), since turnController
+    // drives AI turns without going through this confirmation step.
+    requestCommanderPlacement(locId) {
+        if (GameState.settings.gameOver) return;
         if (GameState.turn.phase !== 'place') return;
+        const cp = GameState.players[GameState.turn.currentPlayerIndex];
+        if (!cp || cp.isAI) return;
+        if (!cp.commanders || cp.commanders.length === 0) return;
 
+        GameState.turn.pendingChoice = {
+            type: 'confirmPlacement',
+            context: { locId, commanderColor: cp.commanders[0] }
+        };
+        if (window.gameUI) window.gameUI.renderFullState();
+    },
+
+    resolveConfirmPlacement(confirmed) {
+        const pc = GameState.turn.pendingChoice;
+        if (!pc || pc.type !== 'confirmPlacement') return;
+        const locId = pc.context.locId;
+        GameState.turn.pendingChoice = null;
+        if (confirmed) {
+            this.placeCommander(locId);
+        } else if (window.gameUI) {
+            window.gameUI.renderFullState();
+        }
+    },
+
+    placeCommander(locId) {
+        if (GameState.settings.gameOver) return;
+        if (GameState.turn.phase !== 'place') return;
         const cp = GameState.players[GameState.turn.currentPlayerIndex];
 
         // --- NEW: Cost Check Before Placement ---
@@ -435,6 +476,7 @@ const GameEngine = {
         const breastplate = cp.gear.find(g => g.id === 'gear_breastplate');
         if (breastplate && breastplate.upgraded) {
             cp.vp += 2;
+            cp.vpBreakdown.gear += 2;
             this.logEvent(`${cp.name} gained +2 VP (Upgraded Breastplate bonus).`);
         }
 
@@ -1270,6 +1312,7 @@ const GameEngine = {
     },
 
     async completeRaid(raidId) {
+        if (GameState.settings.gameOver) return;
         const cp = GameState.players[GameState.turn.currentPlayerIndex];
         const raidIndex = cp.raidsInHand.findIndex(r => r.id === raidId);
         if (raidIndex === -1) return;
@@ -1300,6 +1343,7 @@ const GameEngine = {
 
         // Apply VP
         cp.vp += raid.baseVP;
+        cp.vpBreakdown.raids += raid.baseVP;
 
         // --- CHECK RAID BONUS REQUIREMENTS (On-Completion Bonuses) ---
         if (raid.bonusReq) {
@@ -1334,6 +1378,7 @@ const GameEngine = {
                         if (reqs.green) cp.resources.green -= reqs.green;
                     }
                     cp.vp += raid.bonusVP;
+                    cp.vpBreakdown.raids += raid.bonusVP;
                     raid.bonusAchieved = true;
                     this.logEvent(`${cp.name} completed Bonus Objective: ${raid.bonus} (+${raid.bonusVP} VP)`);
 
@@ -1727,6 +1772,7 @@ const GameEngine = {
     },
 
     nextPhase() {
+        if (GameState.settings.gameOver) return;
         const phases = ['activate', 'place', 'turnin'];
         let currentIndex = phases.indexOf(GameState.turn.phase);
 
@@ -1774,6 +1820,16 @@ const GameEngine = {
     },
 
     calculateFinalScores() {
+        // Guard against ever scoring twice — every VP source below is a `+=`,
+        // not an absolute recompute, so a second call (e.g. if the player kept
+        // clicking Next Phase after the game-over dialog) would double-count
+        // gear VP, raid-set bonuses, and hex majorities on top of the first,
+        // already-correct pass. GameState.settings.gameOver is also what
+        // placeCommander/nextPhase/completeRaid check to refuse further
+        // actions once the game has actually ended.
+        if (GameState.settings.gameOver) return;
+        GameState.settings.gameOver = true;
+
         this.logEvent("Calculating Final Scores...");
         const scores = [];
 
@@ -1816,6 +1872,7 @@ const GameEngine = {
             if (winners.length === 1) {
                 const w = winners[0];
                 GameState.players[w].vp += hex.vp;
+                GameState.players[w].vpBreakdown.theos += hex.vp;
                 this.logEvent(`${GameState.players[w].name} scored ${hex.vp} VP for controlling ${hex.type} hex (${hex.id}).`);
                 return;
             }
@@ -1838,6 +1895,7 @@ const GameEngine = {
             if (strengthWinners.length === 1) {
                 const w = strengthWinners[0];
                 GameState.players[w].vp += hex.vp;
+                GameState.players[w].vpBreakdown.theos += hex.vp;
                 this.logEvent(`${GameState.players[w].name} won a strength tie-break (${maxStrength} strength) for ${hex.type} hex (${hex.id}) and scored ${hex.vp} VP.`);
             } else {
                 this.logEvent(`${hex.type} hex (${hex.id}) was tied on cubes and on strength (${maxStrength}) — no bonus VP awarded, per the rulebook.`);
@@ -1847,11 +1905,14 @@ const GameEngine = {
         // Score Gear
         for (const cp of GameState.players) {
             cp.gear.forEach(g => {
-                cp.vp += g.upgraded ? g.upgradedVP : g.basicVP;
+                const gearVP = g.upgraded ? g.upgradedVP : g.basicVP;
+                cp.vp += gearVP;
+                cp.vpBreakdown.gear += gearVP;
             });
 
             // Add 1 VP per unspent Treasure
             cp.vp += cp.treasures;
+            cp.vpBreakdown.treasures += cp.treasures;
 
             // Score End-Game Raid Bonuses
             let royalKing = false, royalQueen = false, royalPrince = false;
@@ -1878,50 +1939,61 @@ const GameEngine = {
                 if (!r.bonusReq && r.bonus) {
                     if (r.bonus.startsWith('Royal Slaying') && royalKing && royalQueen && royalPrince) {
                         cp.vp += r.bonusVP;
+                        cp.vpBreakdown.endGameBonus += r.bonusVP;
                         this.logEvent(`${cp.name} scored ${r.bonusVP} VP for Royal Slaying!`);
                     } else if (r.bonus.startsWith('Village Pillage')) {
                         if ((r.color === 'Blue' && blueVillages >= 2) || (r.color === 'Red' && redVillages >= 2)) {
                             cp.vp += r.bonusVP;
+                            cp.vpBreakdown.endGameBonus += r.bonusVP;
                             this.logEvent(`${cp.name} scored ${r.bonusVP} VP for Village Pillage!`);
                         }
                     } else if (r.bonus.startsWith('Town Terror')) {
                         if ((r.color === 'Green' && greenTowns >= 2) || (r.color === 'Yellow' && yellowTowns >= 2)) {
                             cp.vp += r.bonusVP;
+                            cp.vpBreakdown.endGameBonus += r.bonusVP;
                             this.logEvent(`${cp.name} scored ${r.bonusVP} VP for Town Terror!`);
                         }
                     } else if (r.bonus.startsWith('Master of Puppets')) {
                         const str = window.gameUI ? window.gameUI._calcStrength(cp) : 0;
-                        if (str >= 35) {
+                        // Card text is "If Power is >35" (strictly greater than) — the code
+                        // previously checked >=35, which would incorrectly qualify a player
+                        // sitting at exactly 35.
+                        if (str > 35) {
                             const remainingTroops = cp.resources.yellow + cp.resources.blue + cp.resources.red + cp.resources.green;
                             const vps = Math.min(10, Math.floor(remainingTroops / 3));
                             cp.vp += vps;
+                            cp.vpBreakdown.endGameBonus += vps;
                             this.logEvent(`${cp.name} scored ${vps} VP for Master of Puppets!`);
                         }
                     } else if (r.bonus.startsWith('Maximum Effort')) {
                         if (cp.gear.length > 0 && cp.gear.every(g => g.upgraded)) {
                             cp.vp += r.bonusVP;
+                            cp.vpBreakdown.endGameBonus += r.bonusVP;
                             this.logEvent(`${cp.name} scored ${r.bonusVP} VP for Maximum Effort!`);
                         }
                     } else if (r.bonus.startsWith('Gearhead')) {
                         if (cp.gear.length >= 6) {
                             cp.vp += r.bonusVP;
+                            cp.vpBreakdown.endGameBonus += r.bonusVP;
                             this.logEvent(`${cp.name} scored ${r.bonusVP} VP for Gearhead!`);
                         }
                     } else if (r.bonus.startsWith('King Killer')) {
                         if (kingdomRaids >= 2) {
                             cp.vp += r.bonusVP;
+                            cp.vpBreakdown.endGameBonus += r.bonusVP;
                             this.logEvent(`${cp.name} scored ${r.bonusVP} VP for King Killer!`);
                         }
                     } else if (r.bonus.startsWith('Gotta raid them all!')) {
                         if (uniqueColors['Blue'] && uniqueColors['Red'] && uniqueColors['Green'] && uniqueColors['Yellow']) {
                             cp.vp += r.bonusVP;
+                            cp.vpBreakdown.endGameBonus += r.bonusVP;
                             this.logEvent(`${cp.name} scored ${r.bonusVP} VP for Gotta raid them all!`);
                         }
                     }
                 }
             });
 
-            scores.push({ name: cp.name, vp: cp.vp });
+            scores.push({ name: cp.name, vp: cp.vp, breakdown: cp.vpBreakdown });
         }
 
         // Sort and announce winner

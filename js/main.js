@@ -6,4 +6,5 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Navu Game Initialized');
     GameUI.initBoardZoom();
     GameUI.renderPhaseInfo();
+    GameUI.renderSetupPanel();
 });

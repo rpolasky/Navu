@@ -50,6 +50,36 @@
 
 **Bug reported after this session's changes shipped, now fixed:** the yellow "valid hex" highlight during raid-completion cube placement was using an animation (`gold-pulse`) that only animates `transform: scale(...)` — since a CSS animation replaces an element's whole `transform` value per keyframe rather than adding to a separately-set static one, this was overwriting `.hex-segment`'s own `translate(-50%, -50%)` centering offset for the whole animation, visually clustering every highlighted hex toward one corner. Fixed by pointing it at `gold-pulse-board` (already used correctly elsewhere), whose keyframes include the translate. Added a regression check so this can't silently reappear.
 
+### Session 3 — layout overhaul, placement confirmation, and a second instance of the transform bug
+
+**Layout overhaul (your requests):**
+- **Scrollbars on window resize** — root cause: `#locations-area` (the board) was sized as `width: 70vh; height: 70vh` with no width constraint at all, so a narrow (not just short) window would overflow horizontally regardless of anything else. Changed to `width/height: min(70vh, 56vw)` so the board shrinks by whichever dimension is actually tight.
+- **Game log** — the always-visible panel is gone. A "📜 Log" button in a new top bar opens it as a floating popup instead.
+- **Right action rail** — gone. Replaced with a horizontal "① Activate — ② Place & Collect — ③ Turn-in" tracker across a new top bar, plus a "▶ Turn Actions" button that opens a popup with the current instruction and the Next Phase button. It auto-opens once per new phase for a human turn (skipped if a choice/dialog is already up), and can be reopened/dismissed anytime.
+- **Setup screen** (player count / AI opponents) moved into a centered popup shown only pre-game.
+- With the rail and log gone, widened the player dock and side panel to use the freed space.
+- **Commander placement confirmation** — clicking a location no longer places immediately. It now opens "Place your [Color] Commander on [Location]? Confirm / Cancel" first; Cancel does nothing (nothing was touched yet, so this is a completely safe undo), Confirm runs the actual placement. AI is unaffected (places directly, no popup).
+
+**Bugs reported after Session 2 shipped, now fixed:**
+- **Gear cards "shooting off" on hover** — same root cause as the hex-highlight bug from Session 2, in a different place: `.selectable-card:hover { transform: scale(1.1) !important; }` was overriding the inline `translate(-50%, -50%)` that board-positioned cards (gear/raid market cards drawn on the board) need for their own positioning, on top of the constant `gold-pulse` animation doing the same thing every keyframe cycle — together these caused the described flicker (the card jumps out from under the cursor, hover ends, it snaps back, hover restarts). Fixed by rewriting `.selectable-card`/`:hover` to use only `box-shadow`/`filter` — never `transform` — so this class is now safe on any positioned element, board or dock. This is also exactly what was asked for: glow, no movement.
+- **Favor cards missing from the board** — there's no face-up favor market the way there is for gear/raid/leader (favors are drawn and resolved into a private choice immediately), so nothing was ever rendered at the Favors location. No dedicated card-back art asset exists in the project, so this is a simple CSS-only themed placeholder (dark gradient, gold border) with a live count of favors remaining in the deck — functional as well as decorative.
+
+**Test-suite note:** while re-verifying all of the above, found and fixed a genuine flakiness source in `smoketest.js` itself (not a game bug) — the test runner's `check()` helper wasn't awaiting async test functions, so an earlier async `completeRaid()` call could still be mid-flight when a later, unrelated test ran, occasionally leaking a stray board marker into it. Fixed by making `check()` properly `async`/`await`-based throughout. Ran the full suite 13 consecutive times after the fix with zero failures.
+
+### Session 4 — end-game correctness, the game actually ending, and a detailed score breakdown
+
+**End-game bonus audit (you asked "so all the end-game bonuses work?"):**
+- Checked every raid-set end-game bonus (Royal Slaying, Village Pillage, Town Terror, Master of Puppets, Maximum Effort, Gearhead, King Killer, Gotta Raid Them All) against its actual card text. Found and fixed one real discrepancy: **Master of Puppets**' card says *"If Power is >35"* (strictly greater than), but the code checked `>= 35`. Fixed to match the card exactly.
+- Found and fixed a more significant gap: **the game never actually ended.** `calculateFinalScores()` computed everything correctly, but nothing ever set a "game over" flag afterward, so a player could keep clicking around post-game-over — and since every VP source is a `+=` rather than a full recompute, a second trigger would double-count gear VP, raid bonuses, and hex majorities on top of the first pass. Added the flag, made `calculateFinalScores()` a no-op on a repeat call, and gated `placeCommander`/`nextPhase`/`completeRaid` so play genuinely stops once the game ends.
+
+**Detailed end-of-game score breakdown popup (your request).** The Game Over screen now shows, per player: Raid Treasures (raid completion + in-game bonus objectives), Gear Treasures (held gear VP + gear-passive bonuses like an upgraded Breastplate), Board Treasures (unspent Treasure tokens converted 1:1 at game end), Theos Treasures (Land of Theos hex majorities), and End-Game Bonus Treasures (the raid-set bonuses above) — plus the total. This required adding a `vpBreakdown` tracker to each player that's updated alongside `cp.vp` at every point VP is awarded anywhere in the code (not just at game end), so the breakdown is accurate to the actual source of every point, not reconstructed after the fact.
+
+**Influence & Strength track discs (your other request).** Since no visual track existed before (the code had stub functions with a comment saying they were intentionally left empty), I pulled the actual board art and measured exact coordinates rather than guessing:
+- **Influence**: 5 player rows, each a 13-space zigzag (0–12), even positions on the row's lower line, odd on its upper line — matches your reference image exactly.
+- **Strength**: turned out to be a *branching hex tree*, not a line — Start splits into two paths at each real threshold (5/18/25/32/45) and rejoins at the single-path checkpoints (12/38), matching the 7 thresholds already in `checkStrengthThresholds`. A player's disc snaps to the highest threshold they've reached, alternating sides when two players share a forked tier.
+- Verified the coordinate math by drawing the computed positions back onto the actual board image before writing any rendering code (see the overlay check — every circle landed on its printed space).
+- No wooden-disc art asset exists in the project, so these are CSS-built tokens (wood-tone gradient + a center dot in the player's own color), not real art.
+
 ---
 
 ## 1. What's already working (unchanged from original analysis)
@@ -80,10 +110,10 @@
 ## 4. Remaining UX/UI work
 
 ### 4.1 Visual & thematic polish (in progress)
-- Commander tokens and the phase tracker are done. Still worth a pass on: the native `<select>`/button styling on the initial setup screen (partially done — AI-count dropdown and Start Single Player button are themed), and giving the AI's turn a more polished "thinking" treatment beyond the current pulsing text.
+- Commander tokens and the phase tracker are done. Still worth a pass on: giving the AI's turn a more polished "thinking" treatment beyond the current pulsing text.
 
 ### 4.2 Information architecture
-- Card preview, board zoom, and the game log still compete for the same fixed-width side column — worth reconsidering as tabs or an expandable panel.
+- Card preview and board zoom still share the side panel — now that the log and action rail are popups instead of fixed panels, there's more headroom here if you want to enlarge these further or split them out too.
 
 ### 4.3 Extended game toggle
 - Surface the 8-cube extended-game option as an actual setup checkbox if desired.
@@ -91,14 +121,15 @@
 ### 4.4 GitHub Pages readiness & final QA
 - Cross-browser pass (Chrome/Firefox/Safari on desktop).
 - Confirm relative asset paths continue to resolve under a GitHub Pages subpath (e.g. `username.github.io/repo-name/`) once actually hosted there.
-- A live playtest end-to-end (the smoke test covers code paths and some rendered DOM state, not visual/UX feel — the hex-highlight-position bug from this session is a good example of something a live playtest catches that the test suite alone didn't, since jsdom doesn't compute animated CSS transforms).
+- A live playtest end-to-end remains the best way to catch anything the test suite can't — jsdom doesn't compute animated CSS transforms or actual rendered positions, which is exactly how both the hex-highlight bug and the gear-card-hover bug slipped through automated testing and only showed up in real play.
 
 ---
 
 ## 5. What I'd like from you
 
-1. Play through a full raid-completion → hex-placement cycle again to confirm the highlight-position fix actually looks right on the live board art.
-2. Try triggering General Kirk's cube-move a few times and confirm the adjacency (which hexes count as "1 space" away) matches your expectations of the board.
-3. Any interest in tabbing the side panel (preview/zoom/log), or is the current fixed layout fine now that it's responsive?
-4. Keep flagging anything else that looks or feels off — this kind of "play it and report back" loop is turning out to be the most effective way to find the real gaps.
+1. Play a game through to an actual end (or force-trigger it) and check the new score-breakdown popup — do the category labels and groupings make sense, or would you split/rename anything (e.g., should gear-passive VP like the Breastplate bonus be separate from held-gear VP, both currently under "Gear Treasures")?
+2. Take a look at the Influence and Strength track discs in an actual game — I verified the coordinates against the board art directly, but a live look is still the real test.
+3. Confirm the Master of Puppets fix (now strictly `>35` strength) is what you want — flag it if the `>=35` behavior was actually intentional.
+4. Try resizing the browser window through a range of sizes (including narrower windows, not just shorter ones) and confirm scrollbars are gone in ordinary use.
+5. Keep flagging anything else that looks or feels off — this "play it and report back" loop keeps finding real gaps a test suite alone can't.
 

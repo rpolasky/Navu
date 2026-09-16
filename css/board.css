@@ -6,8 +6,12 @@
 
 #locations-area {
     position: relative;
-    width: 70vh;
-    height: 70vh;
+    /* Sized by height on typical desktop windows (matches the board art's
+       aspect ratio), but capped by a width-based value too so a narrow
+       resized window shrinks the board instead of overflowing horizontally —
+       previously this was 70vh with no width constraint at all. */
+    width: min(70vh, 56vw);
+    height: min(70vh, 56vw);
     flex-shrink: 0;
     background: url('../assets/images/board/FINAL_NAVU_BOARD.png') center/contain no-repeat;
     border-radius: 8px;
@@ -242,7 +246,9 @@
 }
 
 .board-market-card.selectable-card {
-    animation: gold-pulse-board 1.5s infinite;
+    /* Glow animation now comes from the universal .selectable-card rule in
+       css/cards.css (box-shadow only, no transform) — kept z-index here so
+       a selectable board card still renders above non-selectable ones. */
     z-index: 20;
 }
 
@@ -308,4 +314,56 @@
     border: 1px solid rgba(255, 255, 255, 0.7);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
     margin: 2px;
+}
+
+/* Influence / Strength track discs — one per player, sliding along the
+   board's printed tracks as their Influence/Strength values change. No
+   wooden-disc art asset exists for this, so it's a CSS-built token (warm
+   wood-tone base + a colored center ring matching the player's own color)
+   rather than an image. Positioned in percentages relative to #locations-area,
+   same coordinate space as .location/.hex-segment/.commander. */
+.track-disc {
+    position: absolute;
+    width: 2%;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle at 35% 30%, #dab27e, #8b5a2b 70%, #5c3a1a 100%);
+    border: 2px solid #3d2410;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 23;
+    /* Smoothly slide to its new space rather than popping there instantly. */
+    transition: top 0.4s ease, left 0.4s ease;
+    pointer-events: auto;
+}
+
+.track-disc-inner {
+    width: 55%;
+    height: 55%;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0, 0, 0, 0.45);
+}
+
+/* Face-down Favor deck visual at the Favors location. Favors are drawn
+   secretly and resolved immediately into a private choice (unlike gear/raid/
+   leader, which sit face-up on the board as an ongoing market), so nothing
+   was ever rendered there — this is a simple themed card-back placeholder
+   (no dedicated art asset exists for it) with a live remaining-count badge. */
+.favor-deck-visual {
+    width: 24px;
+    height: 32px;
+    border-radius: 3px;
+    background: linear-gradient(160deg, #3a1a1a, #180808);
+    border: 1.5px solid var(--gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: bold;
+    color: var(--gold);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), inset 0 0 6px rgba(212, 175, 55, 0.25);
+    flex-shrink: 0;
 }

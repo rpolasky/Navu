@@ -29,9 +29,9 @@ const errors = [];
         window.document.addEventListener('DOMContentLoaded', () => setTimeout(resolve, 50));
     });
 
-    function check(label, fn) {
+    async function check(label, fn) {
         try {
-            fn();
+            await fn();
             console.log('OK   -', label);
         } catch (e) {
             console.log('FAIL -', label, '->', e.message);
@@ -39,29 +39,29 @@ const errors = [];
         }
     }
 
-    check('GameEngine exists', () => { if (!window.gameEngine) throw new Error('missing'); });
-    check('Dialogs exists', () => { if (!window.Dialogs) throw new Error('missing'); });
-    check('resolveCommanderAction is a function (regression check for the fixed bug)', () => {
+    await check('GameEngine exists', () => { if (!window.gameEngine) throw new Error('missing'); });
+    await check('Dialogs exists', () => { if (!window.Dialogs) throw new Error('missing'); });
+    await check('resolveCommanderAction is a function (regression check for the fixed bug)', () => {
         if (typeof window.gameEngine.resolveCommanderAction !== 'function') throw new Error('still missing!');
     });
 
-    check('startGame(2) runs without throwing', () => {
+    await check('startGame(2) runs without throwing', () => {
         window.gameEngine.startGame(2);
     });
 
-    check('players were created', () => {
+    await check('players were created', () => {
         if (window.eval('GameState').players.length !== 2) throw new Error('expected 2 players, got ' + window.eval('GameState').players.length);
     });
 
     // Resolve starting officer/raid choices for player 0 if pending, to get into real gameplay
-    check('can select a starting officer if offered', () => {
+    await check('can select a starting officer if offered', () => {
         const p0 = window.eval('GameState').players[0];
         if (p0.startingOfficersChoice && p0.startingOfficersChoice.length > 0) {
             window.gameEngine.selectStartingOfficer(p0.startingOfficersChoice[0].id, 0);
         }
     });
 
-    check('can select a starting raid if offered', () => {
+    await check('can select a starting raid if offered', () => {
         const p0 = window.eval('GameState').players[0];
         if (p0.startingRaidsChoice && p0.startingRaidsChoice.length > 0) {
             window.gameEngine.selectStartingRaid(p0.startingRaidsChoice[0].id, 0);
@@ -71,13 +71,13 @@ const errors = [];
     // Drive several placements across both players, deliberately trying to hit a White
     // commander (which was the exact path that used to throw on the missing
     // resolveCommanderAction function) or an activate-then-place combo.
-    check('can place a commander (Phase 2) for current player', () => {
+    await check('can place a commander (Phase 2) for current player', () => {
         window.eval('GameState').turn.phase = 'place';
         const locIds = Object.keys(window.eval('GameState').board.locations);
         window.gameEngine.placeCommander(locIds[0]);
     });
 
-    check('no pendingChoice of type commanderAction is stuck unresolved after placement', () => {
+    await check('no pendingChoice of type commanderAction is stuck unresolved after placement', () => {
         // If a commanderAction choice appeared (White commander / matching activated gear),
         // resolve it now via the exact path the UI buttons use, to confirm it doesn't throw.
         const pc = window.eval('GameState').turn.pendingChoice;
@@ -87,7 +87,7 @@ const errors = [];
     });
 
     // Force a White-commander scenario directly to specifically re-trigger the original bug path
-    check('directly forcing a White commander action color choice resolves without throwing', () => {
+    await check('directly forcing a White commander action color choice resolves without throwing', () => {
         window.eval('GameState').turn.pendingChoice = {
             type: 'commanderAction',
             context: { locId: 'loc-influence', gearId: null }
@@ -95,14 +95,14 @@ const errors = [];
         window.gameEngine.resolveCommanderAction('Blue');
     });
 
-    check('nextPhase can advance through activate -> place -> turnin -> next player', () => {
+    await check('nextPhase can advance through activate -> place -> turnin -> next player', () => {
         window.eval('GameState').turn.phase = 'activate';
         window.gameEngine.nextPhase(); // -> place
         window.gameEngine.nextPhase(); // -> turnin
         window.gameEngine.nextPhase(); // -> next player's activate
     });
 
-    check('completeRaid (now async) can be invoked without throwing synchronously', async () => {
+    await check('completeRaid (now async) can be invoked without throwing synchronously', async () => {
         const p0 = window.eval('GameState').players[0];
         // Give player 0 a raid in hand plus enough of everything to complete it, to
         // exercise the async confirm-dialog code path end-to-end.
@@ -114,17 +114,17 @@ const errors = [];
         await window.gameEngine.completeRaid(raid.id);
     });
 
-    check('phase tracker renders 3 steps with a current one highlighted', () => {
+    await check('phase tracker renders 3 steps with a current one highlighted', () => {
         window.eval('GameState').turn.phase = 'place';
         window.gameUI.renderPhaseInfo();
         const doc = window.document;
-        const steps = doc.querySelectorAll('#phase-tracker .phase-step');
+        const steps = doc.querySelectorAll('#phase-tracker-h .phase-step');
         if (steps.length !== 3) throw new Error('expected 3 steps, got ' + steps.length);
-        const current = doc.querySelectorAll('#phase-tracker .phase-step.is-current');
+        const current = doc.querySelectorAll('#phase-tracker-h .phase-step.is-current');
         if (current.length !== 1) throw new Error('expected exactly 1 current step, got ' + current.length);
     });
 
-    check('commanderAction modal renders themed per-color buttons (regression check for the res-b collision bug)', () => {
+    await check('commanderAction modal renders themed per-color buttons (regression check for the res-b collision bug)', () => {
         window.eval('GameState').turn.pendingChoice = {
             type: 'commanderAction',
             context: { locId: 'loc-influence', gearId: null }
@@ -140,7 +140,7 @@ const errors = [];
         window.eval('GameState').turn.pendingChoice = null;
     });
 
-    check('favorSelect modal renders without throwing and uses themed classes', () => {
+    await check('favorSelect modal renders without throwing and uses themed classes', () => {
         window.eval('GameState').turn.pendingChoice = {
             type: 'favorSelect',
             context: {
@@ -156,7 +156,7 @@ const errors = [];
         window.eval('GameState').turn.pendingChoice = null;
     });
 
-    check('strengthReward (threshold 45) modal renders 3 gold buttons', () => {
+    await check('strengthReward (threshold 45) modal renders 3 gold buttons', () => {
         window.eval('GameState').turn.pendingChoice = {
             type: 'strengthReward',
             threshold: 45,
@@ -169,7 +169,7 @@ const errors = [];
         window.eval('GameState').turn.pendingChoice = null;
     });
 
-    check('leader rank conflict: acquiring a 2nd Colonel prompts a swap choice instead of duplicating', () => {
+    await check('leader rank conflict: acquiring a 2nd Colonel prompts a swap choice instead of duplicating', () => {
         const GameState = window.eval('GameState');
         const GameCards = window.eval('GameCards');
         const cp = GameState.players[0];
@@ -193,7 +193,7 @@ const errors = [];
         }
     });
 
-    check('AI leader rank conflict auto-resolves without leaving a stuck pendingChoice', () => {
+    await check('AI leader rank conflict auto-resolves without leaving a stuck pendingChoice', () => {
         const GameState = window.eval('GameState');
         const GameCards = window.eval('GameCards');
         // player 1 is AI in a 1-human-vs-1-AI-ish setup? our test used startGame(2) (2 humans).
@@ -221,9 +221,15 @@ const errors = [];
         }
     });
 
-    check('Land of Theos hex scoring: strength breaks a cube-count tie, and a double-tie awards no VP', () => {
+    await check('Land of Theos hex scoring: strength breaks a cube-count tie, and a double-tie awards no VP', () => {
         const GameState = window.eval('GameState');
         // Set up a clean 2-cube tie on one hex, with player 0 having higher strength.
+        // Also clear completedRaids/treasures for both players — calculateFinalScores
+        // also scores end-game raid-set bonuses and unspent treasures each time it
+        // runs, and this test isn't isolated from earlier tests' state otherwise
+        // (this was the real cause of an earlier intermittent failure here — not the
+        // hex-scoring logic itself, but leftover completedRaids/treasures inflating
+        // the VP delta unpredictably).
         GameState.board.placedMarkers = [
             { hexId: 'hex-k1', playerIndex: 0 },
             { hexId: 'hex-k1', playerIndex: 1 }
@@ -234,29 +240,42 @@ const errors = [];
         GameState.players[1].faceDownLeaders = [];
         GameState.players[0].leaders = [];
         GameState.players[1].leaders = [];
+        GameState.players[0].completedRaids = [];
+        GameState.players[1].completedRaids = [];
+        GameState.players[0].treasures = 0;
+        GameState.players[1].treasures = 0;
         const vpBefore0 = GameState.players[0].vp;
         const vpBefore1 = GameState.players[1].vp;
         window.gameEngine.calculateFinalScores();
-        const hexK1 = window.eval('GameEngine').HEX_ADJACENCY ? null : null; // no-op, just referencing engine exists
-        const hex = window.eval('GameEngine.LOCATION_REWARDS') ? null : null;
         const k1vp = 6; // hex-k1 is a 6-VP Kingdom hex per gameState.js
-        if (GameState.players[0].vp !== vpBefore0 + k1vp) throw new Error('expected player 0 (higher strength) to win the tie and score ' + k1vp + ' VP');
+        if (GameState.players[0].vp !== vpBefore0 + k1vp) throw new Error('expected player 0 (higher strength) to win the tie and score ' + k1vp + ' VP, got delta ' + (GameState.players[0].vp - vpBefore0));
         if (GameState.players[1].vp !== vpBefore1) throw new Error('expected player 1 to score nothing on this hex');
 
         // Now make it a double-tie (equal strength too) on a fresh hex — nobody should score.
+        // Reset the gameOver idempotency guard between these two calculateFinalScores()
+        // calls — the guard means a second call is normally a no-op by design (see the
+        // dedicated idempotency test below), which would otherwise make this second
+        // assertion pass for the wrong reason (nothing ran) rather than actually
+        // re-testing the double-tie-awards-no-VP logic.
+        GameState.settings.gameOver = false;
         GameState.board.placedMarkers = [
             { hexId: 'hex-t6', playerIndex: 0 },
             { hexId: 'hex-t6', playerIndex: 1 }
         ];
         GameState.players[0].gear = [];
+        GameState.players[0].completedRaids = [];
+        GameState.players[1].completedRaids = [];
+        GameState.players[0].treasures = 0;
+        GameState.players[1].treasures = 0;
         const vp0 = GameState.players[0].vp, vp1 = GameState.players[1].vp;
         window.gameEngine.calculateFinalScores();
         if (GameState.players[0].vp !== vp0 || GameState.players[1].vp !== vp1) {
             throw new Error('expected no VP awarded on a full tie (cubes AND strength)');
         }
+        GameState.settings.gameOver = false; // leave it reset for later tests too
     });
 
-    check('General Kirk cube-move: full flow moves an opponent cube to an adjacent hex', () => {
+    await check('General Kirk cube-move: full flow moves an opponent cube to an adjacent hex', () => {
         const GameState = window.eval('GameState');
         const GameCards = window.eval('GameCards');
         const cp = GameState.players[0];
@@ -283,7 +302,7 @@ const errors = [];
         if (!finalPc || finalPc.type !== 'hexPlacement') throw new Error('expected the flow to proceed to hexPlacement afterward, got ' + JSON.stringify(finalPc));
     });
 
-    check('player scoreboard shows each player\'s commanders-in-hand as color-coded tokens', () => {
+    await check('player scoreboard shows each player\'s commanders-in-hand as color-coded tokens', () => {
         const GameState = window.eval('GameState');
         GameState.players[0].commanders = ['Black', 'Purple'];
         window.gameUI.renderFullState();
@@ -296,7 +315,7 @@ const errors = [];
         if (!dots[1].className.includes('cmd-purple')) throw new Error('expected second token to be cmd-purple, got ' + dots[1].className);
     });
 
-    check('hex valid-choice highlight uses the translate-preserving pulse animation (regression check for the squished-hex bug)', () => {
+    await check('hex valid-choice highlight uses the translate-preserving pulse animation (regression check for the squished-hex bug)', () => {
         const boardCss = fs.readFileSync(path.join(__dirname, 'css', 'board.css'), 'utf8');
         const ruleMatch = boardCss.match(/\.hex-segment\.valid-choice\s*\{[^}]*\}/);
         if (!ruleMatch) throw new Error('.hex-segment.valid-choice rule not found in css/board.css');
@@ -304,6 +323,129 @@ const errors = [];
         if (!/animation:\s*gold-pulse-board/.test(rule)) {
             throw new Error('.hex-segment.valid-choice must animate with gold-pulse-board (which preserves translate(-50%,-50%)), not plain gold-pulse — got: ' + rule);
         }
+    });
+
+    await check('selectable-card hover has no transform (regression check for the shooting-off gear card bug)', () => {
+        const cardsCss = fs.readFileSync(path.join(__dirname, 'css', 'cards.css'), 'utf8');
+        const hoverMatch = cardsCss.match(/\.selectable-card:hover\s*\{[^}]*\}/);
+        if (!hoverMatch) throw new Error('.selectable-card:hover rule not found in css/cards.css');
+        if (/transform\s*:/.test(hoverMatch[0])) {
+            throw new Error('.selectable-card:hover must not set transform — board-positioned cards rely on an inline translate(-50%,-50%) for their position, and any transform here (scale, etc) replaces rather than adds to it, making the card jump on hover. Got: ' + hoverMatch[0]);
+        }
+        if (!/@keyframes gold-glow-pulse/.test(cardsCss)) {
+            throw new Error('expected the transform-free gold-glow-pulse animation to still be defined in css/cards.css');
+        }
+    });
+
+    await check('favor deck visual renders with a live remaining-count badge', () => {
+        const GameState = window.eval('GameState');
+        window.gameUI.renderBoard();
+        const doc = window.document;
+        const deckEl = doc.querySelector('#loc-favors .favor-deck-visual');
+        if (!deckEl) throw new Error('expected a .favor-deck-visual element inside #loc-favors');
+        const expectedCount = String(GameState.board.decks.favors.length);
+        if (deckEl.textContent !== expectedCount) {
+            throw new Error('expected deck badge to show ' + expectedCount + ', got ' + deckEl.textContent);
+        }
+    });
+
+    await check('influence track disc appears at the correct zigzag position for each player', () => {
+        const GameState = window.eval('GameState');
+        GameState.players[0].influence = 6; // even -> should sit on the LOWER zigzag line
+        GameState.players[1].influence = 9; // odd -> should sit on the UPPER zigzag line
+        window.gameUI.renderInfluenceTrack();
+        const doc = window.document;
+        const discs = doc.querySelectorAll('#influence-track .track-disc');
+        if (discs.length !== GameState.players.length) throw new Error('expected ' + GameState.players.length + ' discs, got ' + discs.length);
+        const p0 = window.gameUI._getInfluencePos(6, 0);
+        const p1 = window.gameUI._getInfluencePos(9, 1);
+        if (Math.abs(p0.y - p1.y) < 0.5) throw new Error('expected different rows to have different Y positions');
+        // even position should be lower (larger %) than the odd position within the SAME row
+        const evenPos = window.gameUI._getInfluencePos(6, 0);
+        const oddPos = window.gameUI._getInfluencePos(7, 0);
+        if (!(oddPos.y < evenPos.y)) throw new Error('expected odd position to sit higher (smaller %) than even position on the same row');
+    });
+
+    await check('strength track disc snaps to the correct tree node for a given strength value', () => {
+        const belowFive = window.gameUI._getStrengthPos(3, 0);
+        const atStart = window.gameUI.STRENGTH_TREE_NODES.find(n => n.value === 0);
+        if (belowFive.x !== atStart.x || belowFive.y !== atStart.y) throw new Error('strength 3 should sit at the Start node');
+
+        const at20 = window.gameUI._getStrengthPos(20, 0);
+        const node18 = window.gameUI.STRENGTH_TREE_NODES.filter(n => n.value === 18);
+        if (!node18.some(n => n.x === at20.x && n.y === at20.y)) throw new Error('strength 20 should snap down to the 18 tier, not round up to 25');
+
+        const atMax = window.gameUI._getStrengthPos(99, 0);
+        const node45 = window.gameUI.STRENGTH_TREE_NODES.filter(n => n.value === 45);
+        if (!node45.some(n => n.x === atMax.x && n.y === atMax.y)) throw new Error('strength above 45 should still snap to the 45 tier (the max)');
+
+        window.gameUI.renderStrengthTrack();
+        const doc = window.document;
+        const discs = doc.querySelectorAll('#strength-track .track-disc');
+        if (discs.length !== window.eval('GameState').players.length) throw new Error('expected one strength disc per player');
+    });
+
+    await check('calculateFinalScores is idempotent — a second call after gameOver is a no-op', () => {
+        const GameState = window.eval('GameState');
+        GameState.settings.gameOver = false;
+        GameState.board.placedMarkers = [{ hexId: 'hex-k1', playerIndex: 0 }];
+        window.gameEngine.calculateFinalScores();
+        if (!GameState.settings.gameOver) throw new Error('expected gameOver to be set true after calculateFinalScores runs');
+        const vpAfterFirst = GameState.players[0].vp;
+        window.gameEngine.calculateFinalScores(); // should be a no-op now
+        if (GameState.players[0].vp !== vpAfterFirst) throw new Error('expected a second calculateFinalScores call to change nothing (double-scoring bug)');
+        GameState.settings.gameOver = false; // reset for later tests
+    });
+
+    await check('placeCommander/nextPhase/completeRaid all refuse to act once gameOver is set', async () => {
+        const GameState = window.eval('GameState');
+        GameState.settings.gameOver = true;
+        const phaseBefore = GameState.turn.phase;
+        window.gameEngine.nextPhase();
+        if (GameState.turn.phase !== phaseBefore) throw new Error('nextPhase should not advance once gameOver is set');
+
+        const boardBefore = JSON.stringify(GameState.board.locations);
+        window.gameEngine.placeCommander(Object.keys(GameState.board.locations)[0]);
+        if (JSON.stringify(GameState.board.locations) !== boardBefore) throw new Error('placeCommander should not place once gameOver is set');
+
+        const vpBefore = GameState.players[0].vp;
+        await window.gameEngine.completeRaid('nonexistent-raid-id-anyway');
+        if (GameState.players[0].vp !== vpBefore) throw new Error('completeRaid should not run once gameOver is set');
+
+        GameState.settings.gameOver = false; // reset for later tests
+    });
+
+    await check("VP breakdown tracks category totals that sum to the player's total VP", () => {
+        const GameState = window.eval('GameState');
+        const p = GameState.players[0];
+        p.vp = 0;
+        p.vpBreakdown = { raids: 0, gear: 0, treasures: 0, theos: 0, endGameBonus: 0 };
+        p.gear = [{ id: 'gt', upgraded: false, basicStrength: 5, upgradedStrength: 5, basicVP: 3, upgradedVP: 3 }];
+        p.treasures = 4;
+        p.completedRaids = [];
+        p.faceDownLeaders = [];
+        p.leaders = [];
+        GameState.board.placedMarkers = [{ hexId: 'hex-v2', playerIndex: 0 }]; // sole marker -> uncontested win
+        GameState.settings.gameOver = false;
+        window.gameEngine.calculateFinalScores();
+        const sum = p.vpBreakdown.raids + p.vpBreakdown.gear + p.vpBreakdown.treasures + p.vpBreakdown.theos + p.vpBreakdown.endGameBonus;
+        if (sum !== p.vp) throw new Error('expected vpBreakdown categories (' + sum + ') to sum to cp.vp (' + p.vp + ')');
+        if (p.vpBreakdown.gear !== 3) throw new Error('expected 3 VP tracked under gear, got ' + p.vpBreakdown.gear);
+        if (p.vpBreakdown.treasures !== 4) throw new Error('expected 4 VP tracked under treasures, got ' + p.vpBreakdown.treasures);
+        GameState.settings.gameOver = false; // reset for later tests
+    });
+
+    await check('game-over popup renders a breakdown section per player', () => {
+        const GameState = window.eval('GameState');
+        const scores = GameState.players.map(p => ({ name: p.name, vp: p.vp, breakdown: p.vpBreakdown }));
+        scores.sort((a, b) => b.vp - a.vp);
+        window.Dialogs.showGameOver(scores);
+        const doc = window.document;
+        const blocks = doc.querySelectorAll('.game-over-player');
+        if (blocks.length !== GameState.players.length) throw new Error('expected one breakdown block per player, got ' + blocks.length);
+        const firstBlockRows = blocks[0].querySelectorAll('.game-over-breakdown li');
+        if (firstBlockRows.length !== 5) throw new Error('expected 5 category rows per player, got ' + firstBlockRows.length);
+        if (!blocks[0].classList.contains('winner')) throw new Error('expected the first (highest-VP) block to be marked as winner');
     });
 
     await new Promise(r => setTimeout(r, 200));
