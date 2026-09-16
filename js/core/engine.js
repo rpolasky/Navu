@@ -50,6 +50,11 @@ const GameEngine = {
                 },
                 gear: [],
                 leaders: [],
+                // Leaders bumped out by a same-rank recruitment (see grantLeaderCard).
+                // Face-down: no strength/passive-ability effect during play, but the
+                // rulebook has their strength count toward the Land of Theos end-game
+                // tie-break (see calculateFinalScores / _calcTiebreakStrength).
+                faceDownLeaders: [],
                 startingOfficersChoice: [],
                 startingRaidsChoice: [],
                 commanders: ['Black'],
@@ -220,6 +225,30 @@ const GameEngine = {
 
     modifyInfluence(player, amount) {
         player.influence = Math.min(player.influence + amount, 12);
+    },
+
+    // Land of Theos hex adjacency, derived from each hex's board position
+    // (css/board.css .hex-segment percentages / GameState.board.hexGrid pos values) —
+    // two hexes are neighbors here if they actually share an edge on the board art.
+    // Used by General Kirk's "move an opponent's cube 1 space" ability.
+    HEX_ADJACENCY: {
+        'hex-k1': ['hex-t6', 'hex-t1', 'hex-t3'],
+        'hex-t6': ['hex-k1', 'hex-t3', 'hex-t4'],
+        'hex-t1': ['hex-k1', 'hex-t3', 'hex-v3'],
+        'hex-t3': ['hex-k1', 'hex-t6', 'hex-t1', 'hex-t4', 'hex-v3', 'hex-all'],
+        'hex-t4': ['hex-t6', 'hex-t3', 'hex-all', 'hex-k3'],
+        'hex-v3': ['hex-t1', 'hex-t3', 'hex-all', 'hex-t2', 'hex-v1'],
+        'hex-all': ['hex-t3', 'hex-t4', 'hex-v3', 'hex-k3', 'hex-v1', 'hex-k4'],
+        'hex-k3': ['hex-t4', 'hex-all', 'hex-k4'],
+        'hex-t2': ['hex-v3', 'hex-v1', 'hex-k2'],
+        'hex-v1': ['hex-v3', 'hex-all', 'hex-t2', 'hex-k4', 'hex-k2', 'hex-k6'],
+        'hex-k4': ['hex-all', 'hex-k3', 'hex-v1', 'hex-k6', 'hex-k5'],
+        'hex-k2': ['hex-t2', 'hex-v1', 'hex-k6', 'hex-v2', 'hex-v4'],
+        'hex-k6': ['hex-v1', 'hex-k4', 'hex-k2', 'hex-k5', 'hex-v4', 'hex-t5'],
+        'hex-k5': ['hex-k4', 'hex-k6', 'hex-t5'],
+        'hex-v2': ['hex-k2', 'hex-v4'],
+        'hex-v4': ['hex-k2', 'hex-k6', 'hex-v2', 'hex-t5'],
+        'hex-t5': ['hex-k6', 'hex-k5', 'hex-v4']
     },
 
     LOCATION_REWARDS: {
@@ -562,15 +591,21 @@ const GameEngine = {
 
                     card = GameState.board.decks.leaders[type].pop();
                     if (card) {
-                        player.leaders.push(card);
-                        this.logEvent(`${player.name} acquired a ${type.charAt(0).toUpperCase() + type.slice(1)}: ${card.name}`);
+                        this.grantLeaderCard(player, card);
                     }
                 }
             }
         }
 
+        // If granting a Leader just above created a rank-conflict choice, it takes
+        // priority over anything else this reward would set (no current location
+        // combines a Leader reward with a special overlay or Lieutenant passive
+        // trigger, but this guards against silently overwriting the swap choice
+        // if that ever changes).
+        const leaderSwapPending = GameState.turn.pendingChoice && GameState.turn.pendingChoice.type === 'leaderRankConflict';
+
         // Trigger Special Overlays
-        if (reward.special) {
+        if (reward.special && !leaderSwapPending) {
             // Gauntlets Bonus: Cycle market when buying gear with ANY commander
             const gauntlets = player.gear.find(g => g.id === 'gear_gauntlets' && GameState.turn.activatedGearIds.includes('gear_gauntlets'));
             const canCycle = config.cycle || !!gauntlets;
@@ -582,14 +617,14 @@ const GameEngine = {
         }
 
         // --- POST-REWARD PASSIVES (Lieutenants) ---
-        this.checkPostRewardPassives(player, locId, actionColor, reward);
+        if (!leaderSwapPending) {
+            this.checkPostRewardPassives(player, locId, actionColor, reward);
+        }
 
         if (window.gameUI) window.gameUI.renderFullState();
     },
 
     checkPostRewardPassives(player, locId, actionColor, reward) {
-        // Lt Lee: Gain a bonus Red/Warrior AFTER acquiring 2+ resources from a troop location
-        const troopLocations = ['loc-barracks', 'loc-archery', 'loc-docks', 'loc-assassins'];
         let totalResGained = 0;
         if (reward.resources) {
             totalResGained = Object.values(reward.resources).reduce((a, b) => a + b, 0);
@@ -597,10 +632,10 @@ const GameEngine = {
 
         for (const leader of player.leaders) {
             if (leader.id === 'lt_lee') {
-                // Lt Lee: Gain 2 additional Influence AFTER acquiring 2 or more RESOURCES (not influence) from a location
-                if (totalResGained >= 2) {
+                // Lt Lee: Gain 2 additional Influence AFTER acquiring 2+ INFLUENCE from a location.
+                if (reward.influence && reward.influence >= 2) {
                     this.modifyInfluence(player, 2);
-                    this.logEvent(`${player.name}'s Lt. Lee triggered: +2 Influence for gaining ${totalResGained} resources.`);
+                    this.logEvent(`${player.name}'s Lt. Lee triggered: +2 Influence for gaining ${reward.influence} Influence.`);
                 }
             }
             if (leader.id === 'lt_beier') {
@@ -816,8 +851,11 @@ const GameEngine = {
             }
             if (GameState.board.decks.leaders.lieutenant.length > 0) {
                 const ltCard = GameState.board.decks.leaders.lieutenant.pop();
-                cp.leaders.push(ltCard);
-                this.logEvent(`${cp.name} gained a Lieutenant from ${officer.name}: ${ltCard.name}.`);
+                // The card text says this Lieutenant is granted face down, not active —
+                // it contributes no strength/passive ability, only the Land of Theos
+                // end-game tie-break (see faceDownLeaders / _calcTiebreakStrength).
+                cp.faceDownLeaders.push(ltCard);
+                this.logEvent(`${cp.name} gained a face-down Lieutenant from ${officer.name}: ${ltCard.name}.`);
             }
             this._finishOfficerSelection(idx);
         }
@@ -834,6 +872,74 @@ const GameEngine = {
         // Only clear pendingChoice if it's the current player (to avoid clearing UI state for human)
         if (idx === GameState.turn.currentPlayerIndex) GameState.turn.pendingChoice = null;
         this.checkStrengthThresholds(cp);
+    },
+
+    // ------------------------------------------------------------------
+    // Leader (ranked officer) acquisition.
+    //
+    // Rulebook rule: a player can only have 1 ACTIVE leader per rank
+    // (Lieutenant / Colonel / General). Recruiting an additional leader of
+    // a rank you already hold requires a swap: the leader that doesn't stay
+    // active goes face down under the active one. A face-down leader's
+    // strength and passive ability stop applying during play — its
+    // strength only matters again as the Land of Theos end-game tie-break.
+    //
+    // Every place in the code that grants a ranked leader (Command Center,
+    // strength-threshold rewards, favor-card free leader picks, etc.) should
+    // route through this instead of pushing to player.leaders directly, so
+    // this rule is enforced everywhere consistently.
+    // ------------------------------------------------------------------
+    grantLeaderCard(player, newCard) {
+        if (!newCard) return;
+        const rank = newCard.rank; // 'Lieutenant' | 'Colonel' | 'General'
+        const existingIndex = player.leaders.findIndex(l => l.rank === rank);
+
+        if (existingIndex === -1) {
+            player.leaders.push(newCard);
+            this.logEvent(`${player.name} acquired a ${rank}: ${newCard.name}.`);
+            if (window.gameUI) window.gameUI.renderFullState();
+            return;
+        }
+
+        const existingCard = player.leaders[existingIndex];
+
+        if (player.isAI) {
+            // Simple heuristic: keep whichever has higher strength; keep the
+            // current one on a tie (avoids needless churn of its passive ability).
+            const keepNew = newCard.strength > existingCard.strength;
+            this._resolveLeaderSwap(player, existingIndex, newCard, keepNew);
+            return;
+        }
+
+        GameState.turn.pendingChoice = {
+            type: 'leaderRankConflict',
+            context: { rank, existingCard, newCard, existingIndex }
+        };
+        this.logEvent(`${player.name} must choose which ${rank} stays active: ${existingCard.name} or ${newCard.name}.`);
+        if (window.gameUI) window.gameUI.renderFullState();
+    },
+
+    // keepNew: true = the newly acquired card becomes active, existing goes face down.
+    //          false = keep the current active card, the newly acquired one goes face down.
+    resolveLeaderRankConflict(keepNew) {
+        const pc = GameState.turn.pendingChoice;
+        if (!pc || pc.type !== 'leaderRankConflict') return;
+        const cp = GameState.players[GameState.turn.currentPlayerIndex];
+        GameState.turn.pendingChoice = null;
+        this._resolveLeaderSwap(cp, pc.context.existingIndex, pc.context.newCard, keepNew);
+    },
+
+    _resolveLeaderSwap(player, existingIndex, newCard, keepNew) {
+        const existingCard = player.leaders[existingIndex];
+        if (keepNew) {
+            player.leaders[existingIndex] = newCard;
+            player.faceDownLeaders.push(existingCard);
+            this.logEvent(`${player.name} recruited ${newCard.name}, placing ${existingCard.name} face down.`);
+        } else {
+            player.faceDownLeaders.push(newCard);
+            this.logEvent(`${player.name} kept ${existingCard.name} active, placing ${newCard.name} face down.`);
+        }
+        if (window.gameUI) window.gameUI.renderFullState();
     },
 
     selectStartingRaid(raidId, playerIndex = null) {
@@ -911,7 +1017,7 @@ const GameEngine = {
                     cp.raidsInHand.push(card);
                     if (cp.isAI) this.logEvent(`${cp.name} (AI) added Raid to hand.`);
                 } else if (marketType === 'leaders') {
-                    cp.leaders.push(card);
+                    this.grantLeaderCard(cp, card);
                     if (cp.isAI) this.logEvent(`${cp.name} (AI) added Leader to hand.`);
                 }
 
@@ -926,14 +1032,21 @@ const GameEngine = {
                     market.splice(cardIndex, 1);
                 }
 
-                // Check if this was a starting choice or a location reward
-                if (pc.officerId) {
-                    this.checkPostGearPurchasePassives(cp);
-                    this._finishOfficerSelection();
-                } else if (pc.context && pc.context.config && pc.context.config.count > 1) {
-                    pc.context.config.count--;
-                } else {
-                    GameState.turn.pendingChoice = null;
+                // If granting a Leader created a rank-conflict choice (the player already
+                // has an active leader of that rank), that choice takes priority — don't
+                // clear/advance past it below.
+                const leaderSwapPending = GameState.turn.pendingChoice && GameState.turn.pendingChoice.type === 'leaderRankConflict';
+
+                if (!leaderSwapPending) {
+                    // Check if this was a starting choice or a location reward
+                    if (pc.officerId) {
+                        this.checkPostGearPurchasePassives(cp);
+                        this._finishOfficerSelection();
+                    } else if (pc.context && pc.context.config && pc.context.config.count > 1) {
+                        pc.context.config.count--;
+                    } else {
+                        GameState.turn.pendingChoice = null;
+                    }
                 }
 
                 this.checkStrengthThresholds(cp);
@@ -1274,16 +1387,20 @@ const GameEngine = {
 
         // --- General Kirk passive ---
         const hasKirk = cp.leaders.some(l => l.id === 'gen_kirk');
+        let kirkCubeMovePending = false;
         if (hasKirk && cp.resources.blue >= 1 && cp.resources.red >= 1) {
-            const wantsKirk = await Dialogs.confirm(
-                "Spend 1 Marine + 1 Warrior to gain 3 Treasures? (Opponent cube bumping not yet available in UI)",
-                { title: 'General Kirk', confirmLabel: 'Spend' }
-            );
+            const opponentMarkers = GameState.board.placedMarkers.filter(m => m.playerIndex !== cp.id);
+            const canMoveCube = opponentMarkers.length > 0;
+            const promptMsg = canMoveCube
+                ? "Spend 1 Marine + 1 Warrior to gain 3 Treasures and move an opponent's cube 1 space in the Land of Theos?"
+                : "Spend 1 Marine + 1 Warrior to gain 3 Treasures? (No opponent cubes are on the map yet to move.)";
+            const wantsKirk = await Dialogs.confirm(promptMsg, { title: 'General Kirk', confirmLabel: 'Spend' });
             if (wantsKirk) {
                 cp.resources.blue -= 1;
                 cp.resources.red -= 1;
                 cp.treasures += 3;
                 this.logEvent(`${cp.name} used Gen. Kirk and gained 3 Treasures.`);
+                if (canMoveCube) kirkCubeMovePending = true;
             }
         }
 
@@ -1306,16 +1423,104 @@ const GameEngine = {
         cp.raidsInHand.splice(raidIndex, 1);
         cp.completedRaids.push(raid);
 
-        // --- NEW: Trigger Hex Map Placement ---
+        // Trigger Hex Map Placement — or, if Gen. Kirk's cube-move was triggered
+        // above, that mini-flow (select an opponent's cube, then an adjacent hex)
+        // runs first and defers to _triggerRaidHexPlacement itself once it's done.
+        if (kirkCubeMovePending) {
+            GameState.turn.pendingChoice = {
+                type: 'kirkSelectCubeSource',
+                context: {
+                    message: "General Kirk: select a hex with an opponent's cube to move 1 space.",
+                    afterRaidType: raidTypeForPlacement
+                }
+            };
+            if (window.gameUI) window.gameUI.renderFullState();
+        } else {
+            this._triggerRaidHexPlacement(raidTypeForPlacement);
+        }
+    },
+
+    // The final step of completing a raid: open the hex-map marker placement choice.
+    // Split out from completeRaid so General Kirk's cube-move mini-flow can defer
+    // calling this until after its own pendingChoice sequence finishes.
+    _triggerRaidHexPlacement(raidType) {
         GameState.turn.pendingChoice = {
             type: 'hexPlacement',
             context: {
-                raidType: raidTypeForPlacement, // 'Kingdom', 'Village', 'Town', or 'All'
-                message: `Select a ${raidTypeForPlacement} hexagon to place your marker.`
+                raidType, // 'Kingdom', 'Village', 'Town', or 'All'
+                message: `Select a ${raidType} hexagon to place your marker.`
             }
         };
-
         if (window.gameUI) window.gameUI.renderFullState();
+    },
+
+    // --- General Kirk cube-move mini-flow ---
+    // Step 1: pick a hex with at least one opponent's cube.
+    resolveKirkCubeSource(hexId) {
+        const pc = GameState.turn.pendingChoice;
+        if (!pc || pc.type !== 'kirkSelectCubeSource') return;
+        const cp = GameState.players[GameState.turn.currentPlayerIndex];
+
+        const opponentsHere = [...new Set(
+            GameState.board.placedMarkers
+                .filter(m => m.hexId === hexId && m.playerIndex !== cp.id)
+                .map(m => m.playerIndex)
+        )];
+        if (opponentsHere.length === 0) return; // not a valid source hex
+
+        if (opponentsHere.length === 1) {
+            this._beginKirkCubeDestChoice(hexId, opponentsHere[0], pc.context.afterRaidType);
+        } else {
+            // Multiple different opponents have a cube on this hex — ask which one to move.
+            GameState.turn.pendingChoice = {
+                type: 'kirkSelectCubeOwner',
+                context: { hexId, opponentIndexes: opponentsHere, afterRaidType: pc.context.afterRaidType }
+            };
+            if (window.gameUI) window.gameUI.renderFullState();
+        }
+    },
+
+    // Step 1b (only if step 1 found more than one opponent on that hex): pick whose cube.
+    resolveKirkCubeOwner(playerIndex) {
+        const pc = GameState.turn.pendingChoice;
+        if (!pc || pc.type !== 'kirkSelectCubeOwner') return;
+        this._beginKirkCubeDestChoice(pc.context.hexId, playerIndex, pc.context.afterRaidType);
+    },
+
+    _beginKirkCubeDestChoice(sourceHexId, targetPlayerIndex, afterRaidType) {
+        const targetName = GameState.players[targetPlayerIndex].name;
+        GameState.turn.pendingChoice = {
+            type: 'kirkSelectCubeDest',
+            context: {
+                sourceHexId, targetPlayerIndex, afterRaidType,
+                message: `Select an adjacent hex to move ${targetName}'s cube to.`
+            }
+        };
+        if (window.gameUI) window.gameUI.renderFullState();
+    },
+
+    // Step 2: pick an adjacent hex to move the chosen cube to.
+    resolveKirkCubeDest(destHexId) {
+        const pc = GameState.turn.pendingChoice;
+        if (!pc || pc.type !== 'kirkSelectCubeDest') return;
+        const { sourceHexId, targetPlayerIndex, afterRaidType } = pc.context;
+
+        const validDestinations = this.HEX_ADJACENCY[sourceHexId] || [];
+        if (!validDestinations.includes(destHexId)) return;
+
+        const markerIndex = GameState.board.placedMarkers.findIndex(
+            m => m.hexId === sourceHexId && m.playerIndex === targetPlayerIndex
+        );
+        if (markerIndex === -1) return;
+
+        GameState.board.placedMarkers.splice(markerIndex, 1);
+        GameState.board.placedMarkers.push({ hexId: destHexId, playerIndex: targetPlayerIndex });
+
+        const cp = GameState.players[GameState.turn.currentPlayerIndex];
+        this.logEvent(`${cp.name} used Gen. Kirk to move ${GameState.players[targetPlayerIndex].name}'s cube from ${sourceHexId} to ${destHexId}.`);
+
+        // Now proceed to the raid's own hex-map placement.
+        this._triggerRaidHexPlacement(afterRaidType);
     },
 
     resolveHexPlacement(hexId) {
@@ -1398,12 +1603,11 @@ const GameEngine = {
 
         if (threshold === 5) {
             if (choice === 'leader') {
-                const hasLt = cp.leaders.some(l => l.id && (l.id.startsWith('lt_') || l.type === 'lieutenant'));
+                const hasLt = cp.leaders.some(l => l.rank === 'Lieutenant');
                 const type = hasLt ? 'colonel' : 'lieutenant';
                 const card = GameState.board.decks.leaders[type].pop();
                 if (card) {
-                    cp.leaders.push(card);
-                    this.logEvent(`${cp.name} chose a ${type}: ${card.name} for reaching Strength 5.`);
+                    this.grantLeaderCard(cp, card);
                 }
             } else {
                 cp.resources.green += 1;
@@ -1584,7 +1788,15 @@ const GameEngine = {
             hexControl[m.hexId][m.playerIndex]++;
         });
 
-        // Determine Hex Majority and award VP
+        // Determine Hex Majority and award VP.
+        //
+        // Rulebook rule (Land of Theos): whichever player has the most cubes on a
+        // hex wins its bonus treasures. If tied on cube count, whichever tied
+        // player has the highest strength wins the tie. If still tied even on
+        // strength, no bonus treasures are awarded for that hex at all.
+        //
+        // The previous implementation awarded full VP to every tied player,
+        // which doesn't match the rulebook — fixed here.
         GameState.board.hexGrid.forEach(hex => {
             const counts = hexControl[hex.id] || {};
             let maxMarkers = 0;
@@ -1599,12 +1811,36 @@ const GameEngine = {
                 }
             }
 
-            // Apply VP to all winners (ties get full points per general board game norms unless specified)
-            if (winners.length > 0) {
-                winners.forEach(w => {
-                    GameState.players[w].vp += hex.vp;
-                    this.logEvent(`${GameState.players[w].name} scored ${hex.vp} VP for controlling ${hex.type} hex (${hex.id}).`);
-                });
+            if (winners.length === 0) return; // no one placed a cube here
+
+            if (winners.length === 1) {
+                const w = winners[0];
+                GameState.players[w].vp += hex.vp;
+                this.logEvent(`${GameState.players[w].name} scored ${hex.vp} VP for controlling ${hex.type} hex (${hex.id}).`);
+                return;
+            }
+
+            // Tied on cube count: highest strength wins. Per the rulebook, a
+            // face-down leader's strength (from a rank swap) counts here even
+            // though it doesn't count toward normal active strength during play.
+            let maxStrength = -1;
+            let strengthWinners = [];
+            winners.forEach(pIdx => {
+                const str = window.gameUI ? window.gameUI._calcTiebreakStrength(GameState.players[pIdx]) : 0;
+                if (str > maxStrength) {
+                    maxStrength = str;
+                    strengthWinners = [pIdx];
+                } else if (str === maxStrength) {
+                    strengthWinners.push(pIdx);
+                }
+            });
+
+            if (strengthWinners.length === 1) {
+                const w = strengthWinners[0];
+                GameState.players[w].vp += hex.vp;
+                this.logEvent(`${GameState.players[w].name} won a strength tie-break (${maxStrength} strength) for ${hex.type} hex (${hex.id}) and scored ${hex.vp} VP.`);
+            } else {
+                this.logEvent(`${hex.type} hex (${hex.id}) was tied on cubes and on strength (${maxStrength}) — no bonus VP awarded, per the rulebook.`);
             }
         });
 

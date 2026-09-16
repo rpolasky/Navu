@@ -27,7 +27,16 @@ const AIChoiceResolver = {
                 
             case 'hexPlacement':
                 return this.resolveHexPlacement(pendingChoice, player);
-                
+
+            case 'kirkSelectCubeSource':
+                return this.resolveKirkCubeSource(pendingChoice, player);
+
+            case 'kirkSelectCubeOwner':
+                return this.resolveKirkCubeOwner(pendingChoice, player);
+
+            case 'kirkSelectCubeDest':
+                return this.resolveKirkCubeDest(pendingChoice, player);
+
             case 'strengthReward':
                 return this.resolveStrengthReward(pendingChoice, player, personality);
                 
@@ -349,6 +358,50 @@ const AIChoiceResolver = {
         
         scores.sort((a, b) => b.score - a.score);
         return scores[0].id;
+    },
+
+    // General Kirk cube-move mini-flow (AI heuristics — simple but reasonable,
+    // not exploitable): disrupt the highest-value hex an opponent controls,
+    // targeting whichever opponent is currently ahead on VP, and shove their
+    // cube to the lowest-value adjacent hex.
+    resolveKirkCubeSource(pc, player) {
+        const candidateHexIds = [...new Set(
+            GameState.board.placedMarkers
+                .filter(m => m.playerIndex !== player.id)
+                .map(m => m.hexId)
+        )];
+        if (candidateHexIds.length === 0) return null;
+
+        let best = candidateHexIds[0];
+        let bestVp = -1;
+        candidateHexIds.forEach(hexId => {
+            const hex = GameState.board.hexGrid.find(h => h.id === hexId);
+            if (hex && hex.vp > bestVp) { bestVp = hex.vp; best = hexId; }
+        });
+        return best;
+    },
+
+    resolveKirkCubeOwner(pc, player) {
+        const { opponentIndexes } = pc.context;
+        let best = opponentIndexes[0];
+        let bestVp = -1;
+        opponentIndexes.forEach(pIdx => {
+            const p = GameState.players[pIdx];
+            if (p.vp > bestVp) { bestVp = p.vp; best = pIdx; }
+        });
+        return best;
+    },
+
+    resolveKirkCubeDest(pc, player) {
+        const options = GameEngine.HEX_ADJACENCY[pc.context.sourceHexId] || [];
+        if (options.length === 0) return null;
+        let best = options[0];
+        let bestVp = Infinity;
+        options.forEach(hexId => {
+            const hex = GameState.board.hexGrid.find(h => h.id === hexId);
+            if (hex && hex.vp < bestVp) { bestVp = hex.vp; best = hexId; }
+        });
+        return best;
     },
 
     resolveStrengthReward(pc, player, personality) {

@@ -165,6 +165,9 @@ const GameUI = {
 
         const pc = GameState.turn.pendingChoice;
         const isHexPlacement = pc && pc.type === 'hexPlacement';
+        const isKirkSource = pc && pc.type === 'kirkSelectCubeSource';
+        const isKirkDest = pc && pc.type === 'kirkSelectCubeDest';
+        const kirkDestOptions = isKirkDest ? (window.gameEngine.HEX_ADJACENCY[pc.context.sourceHexId] || []) : [];
 
         GameState.board.hexGrid.forEach(hex => {
             const el = document.createElement('div');
@@ -180,6 +183,25 @@ const GameUI = {
                     el.onclick = (e) => {
                         e.stopPropagation();
                         window.gameEngine.resolveHexPlacement(hex.id);
+                    };
+                }
+            } else if (isKirkSource) {
+                const cp = GameState.players[GameState.turn.currentPlayerIndex];
+                const hasOpponentCube = GameState.board.placedMarkers.some(m => m.hexId === hex.id && m.playerIndex !== cp.id);
+                el.classList.add(hasOpponentCube ? 'valid-choice' : 'invalid-choice');
+                if (hasOpponentCube) {
+                    el.onclick = (e) => {
+                        e.stopPropagation();
+                        window.gameEngine.resolveKirkCubeSource(hex.id);
+                    };
+                }
+            } else if (isKirkDest) {
+                const isValid = kirkDestOptions.includes(hex.id);
+                el.classList.add(isValid ? 'valid-choice' : 'invalid-choice');
+                if (isValid) {
+                    el.onclick = (e) => {
+                        e.stopPropagation();
+                        window.gameEngine.resolveKirkCubeDest(hex.id);
                     };
                 }
             }
@@ -570,11 +592,15 @@ const GameUI = {
                 const c = colorHex[playerColors[i]] || '#fff';
                 const row = document.createElement('div');
                 row.className = `player-score-row${isActive ? ' is-active' : ''}`;
+                const commanderDots = (p.commanders || [])
+                    .map(color => `<span class="commander commander-mini cmd-${color.toLowerCase()}" title="${color} Commander"></span>`)
+                    .join('');
                 row.innerHTML = `
                     <span class="player-score-dot" style="background:${c};"></span>
                     <span class="player-score-name">${p.name}${isActive ? ' ★' : ''}</span>
                     <span title="Strength" class="player-score-stat">⚔${str}</span>
-                    <span title="Influence" class="player-score-stat player-score-stat-influence">◆${p.influence}</span>`;
+                    <span title="Influence" class="player-score-stat player-score-stat-influence">◆${p.influence}</span>
+                    <span class="player-score-commanders" title="Commanders in hand, ready to place">${commanderDots}</span>`;
                 rows.appendChild(row);
             });
             scoreSec.appendChild(rows);
@@ -589,6 +615,17 @@ const GameUI = {
         let total = 0;
         if (player.gear) player.gear.forEach(g => { total += g.upgraded ? (g.upgradedStrength || 0) : (g.basicStrength || 0); });
         if (player.leaders) player.leaders.forEach(l => { total += l.strength || 0; });
+        return total;
+    },
+
+    // Same as _calcStrength, but also includes face-down leaders (leaders bumped
+    // out by a same-rank recruitment swap). Per the rulebook, a face-down
+    // leader's strength contributes nothing during normal play, but IS counted
+    // when breaking a tie in the Land of Theos end-game scoring — this is used
+    // only for that tie-break, never for normal active-strength checks.
+    _calcTiebreakStrength(player) {
+        let total = this._calcStrength(player);
+        if (player.faceDownLeaders) player.faceDownLeaders.forEach(l => { total += l.strength || 0; });
         return total;
     },
 
@@ -794,6 +831,36 @@ const GameUI = {
                     <button onclick="window.gameEngine.minimizeChoice()" class="btn-dialog-close">View Board</button>
                 </div>
             `;
+        } else if (pc.type === 'kirkSelectCubeSource') {
+            overlay.innerHTML = `
+                <div class="choice-modal">
+                    <h3>General Kirk</h3>
+                    <p>${pc.context.message}</p>
+                    <button onclick="window.gameEngine.minimizeChoice()" class="btn-dialog-close">View Board</button>
+                </div>
+            `;
+        } else if (pc.type === 'kirkSelectCubeOwner') {
+            const { opponentIndexes } = pc.context;
+            overlay.innerHTML = `
+                <div class="choice-modal">
+                    <h3>General Kirk</h3>
+                    <p>Multiple players have a cube here — whose cube do you want to move?</p>
+                    <div class="dialog-btn-row">
+                        ${opponentIndexes.map(pIdx => {
+                            const p = GameState.players[pIdx];
+                            return `<button onclick="window.gameEngine.resolveKirkCubeOwner(${pIdx})" style="background:${p.color};">${p.name}</button>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        } else if (pc.type === 'kirkSelectCubeDest') {
+            overlay.innerHTML = `
+                <div class="choice-modal">
+                    <h3>General Kirk</h3>
+                    <p>${pc.context.message}</p>
+                    <button onclick="window.gameEngine.minimizeChoice()" class="btn-dialog-close">View Board</button>
+                </div>
+            `;
         } else if (pc.type === 'gear') {
             overlay.innerHTML = `
                 <div class="choice-modal">
@@ -808,6 +875,26 @@ const GameUI = {
                     <h3>Raid Selection</h3>
                     <p>Select ${pc.context.config.count || 1} raid card(s) from the market:</p>
                     <button onclick="window.gameEngine.minimizeChoice()" class="btn-dialog-close">Close</button>
+                </div>
+            `;
+        } else if (pc.type === 'leaderRankConflict') {
+            const { rank, existingCard, newCard } = pc.context;
+            const renderLeaderOption = (card, keepNew) => `
+                <div class="leader-conflict-option" onclick="window.gameEngine.resolveLeaderRankConflict(${keepNew})">
+                    <img src="${card.image}" alt="${card.name}" class="leader-conflict-img">
+                    <div class="leader-conflict-name">${card.name}</div>
+                    <div class="leader-conflict-strength">⚔ Strength ${card.strength}</div>
+                    <div class="leader-conflict-ability">${card.passiveAbility || ''}</div>
+                </div>
+            `;
+            overlay.innerHTML = `
+                <div class="choice-modal choice-modal-wide">
+                    <h3>You already have an active ${rank}</h3>
+                    <p>You can only have 1 active ${rank}. Choose which stays active — the other is placed face down (it stops giving strength/ability, but its strength can still break a tie in the Land of Theos at the end of the game).</p>
+                    <div class="leader-conflict-grid">
+                        ${renderLeaderOption(existingCard, false)}
+                        ${renderLeaderOption(newCard, true)}
+                    </div>
                 </div>
             `;
         } else if (pc.type === 'strengthReward') {

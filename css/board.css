@@ -177,6 +177,29 @@
     border-color: rgba(0, 0, 0, 0.3);
 }
 
+/* Small non-interactive commander indicator used in the player scoreboard
+   (css/layout.css .player-score-row) to show which commanders each player
+   currently holds in hand, ready to place. */
+.commander-mini {
+    width: 12px;
+    height: 14px;
+    cursor: default;
+    box-shadow: none;
+    border-width: 1px;
+}
+
+.commander-mini:hover {
+    transform: none;
+    filter: none;
+}
+
+.player-score-commanders {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    margin-left: auto;
+}
+
 /* Board-positioned market cards (gear / raids / leaders drawn on the board) */
 .board-market-card {
     position: absolute;
@@ -262,7 +285,14 @@
 }
 
 .hex-segment.valid-choice {
-    animation: gold-pulse 1.3s infinite;
+    /* Uses gold-pulse-board (not the plain gold-pulse from cards.css), because that
+       one's keyframes include translate(-50%, -50%) alongside the scale. A CSS
+       animation replaces an element's whole transform value at each keyframe rather
+       than adding to a separately-set static transform, so using plain gold-pulse
+       here was overwriting .hex-segment's own translate(-50%, -50%) centering offset
+       for the whole animation — every highlighted hex lost its center-on-point
+       positioning and visually clustered toward one corner of the hex grid. */
+    animation: gold-pulse-board 1.3s infinite;
     background: rgba(212, 175, 55, 0.25);
     border: 2px solid var(--gold);
 }

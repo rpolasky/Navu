@@ -169,6 +169,143 @@ const errors = [];
         window.eval('GameState').turn.pendingChoice = null;
     });
 
+    check('leader rank conflict: acquiring a 2nd Colonel prompts a swap choice instead of duplicating', () => {
+        const GameState = window.eval('GameState');
+        const GameCards = window.eval('GameCards');
+        const cp = GameState.players[0];
+        cp.leaders = [];
+        cp.faceDownLeaders = [];
+        const colonelCards = GameCards.leaders.filter(l => l.rank === 'Colonel');
+        window.gameEngine.grantLeaderCard(cp, JSON.parse(JSON.stringify(colonelCards[0])));
+        if (cp.leaders.length !== 1) throw new Error('expected 1 leader after first grant, got ' + cp.leaders.length);
+
+        window.gameEngine.grantLeaderCard(cp, JSON.parse(JSON.stringify(colonelCards[1])));
+        const pc = GameState.turn.pendingChoice;
+        if (!pc || pc.type !== 'leaderRankConflict') throw new Error('expected a leaderRankConflict pendingChoice, got ' + JSON.stringify(pc));
+        if (cp.leaders.length !== 1) throw new Error('should NOT have 2 active Colonels while the choice is pending, got ' + cp.leaders.length);
+
+        // Resolve: keep the new one
+        window.gameEngine.resolveLeaderRankConflict(true);
+        if (cp.leaders.length !== 1) throw new Error('expected exactly 1 active Colonel after resolving, got ' + cp.leaders.length);
+        if (cp.leaders[0].id !== colonelCards[1].id) throw new Error('expected the new Colonel to be active');
+        if (cp.faceDownLeaders.length !== 1 || cp.faceDownLeaders[0].id !== colonelCards[0].id) {
+            throw new Error('expected the old Colonel to be face-down, got ' + JSON.stringify(cp.faceDownLeaders));
+        }
+    });
+
+    check('AI leader rank conflict auto-resolves without leaving a stuck pendingChoice', () => {
+        const GameState = window.eval('GameState');
+        const GameCards = window.eval('GameCards');
+        // player 1 is AI in a 1-human-vs-1-AI-ish setup? our test used startGame(2) (2 humans).
+        // Force an AI flag temporarily to exercise the AI branch of grantLeaderCard — needs a
+        // matching aiPersonality object too, since renderPlayerDock reads cp.aiPersonality.name
+        // whenever isAI is true (real startGame() always sets both together).
+        const p = GameState.players[1];
+        const wasAI = p.isAI;
+        const wasPersonality = p.aiPersonality;
+        p.isAI = true;
+        p.aiPersonality = { name: 'Test AI', description: 'test' };
+        p.leaders = [];
+        p.faceDownLeaders = [];
+        try {
+            const ltCards = GameCards.leaders.filter(l => l.rank === 'Lieutenant');
+            window.gameEngine.grantLeaderCard(p, JSON.parse(JSON.stringify(ltCards[0])));
+            window.gameEngine.grantLeaderCard(p, JSON.parse(JSON.stringify(ltCards[1])));
+            if (GameState.turn.pendingChoice && GameState.turn.pendingChoice.type === 'leaderRankConflict') {
+                throw new Error('AI should auto-resolve the swap, not leave a pendingChoice');
+            }
+            if (p.leaders.length !== 1) throw new Error('AI should still end up with exactly 1 active Lieutenant, got ' + p.leaders.length);
+        } finally {
+            p.isAI = wasAI;
+            p.aiPersonality = wasPersonality;
+        }
+    });
+
+    check('Land of Theos hex scoring: strength breaks a cube-count tie, and a double-tie awards no VP', () => {
+        const GameState = window.eval('GameState');
+        // Set up a clean 2-cube tie on one hex, with player 0 having higher strength.
+        GameState.board.placedMarkers = [
+            { hexId: 'hex-k1', playerIndex: 0 },
+            { hexId: 'hex-k1', playerIndex: 1 }
+        ];
+        GameState.players[0].gear = [{ id: 'gear_test', upgraded: false, basicStrength: 10, upgradedStrength: 10, basicVP: 0, upgradedVP: 0 }];
+        GameState.players[1].gear = [];
+        GameState.players[0].faceDownLeaders = [];
+        GameState.players[1].faceDownLeaders = [];
+        GameState.players[0].leaders = [];
+        GameState.players[1].leaders = [];
+        const vpBefore0 = GameState.players[0].vp;
+        const vpBefore1 = GameState.players[1].vp;
+        window.gameEngine.calculateFinalScores();
+        const hexK1 = window.eval('GameEngine').HEX_ADJACENCY ? null : null; // no-op, just referencing engine exists
+        const hex = window.eval('GameEngine.LOCATION_REWARDS') ? null : null;
+        const k1vp = 6; // hex-k1 is a 6-VP Kingdom hex per gameState.js
+        if (GameState.players[0].vp !== vpBefore0 + k1vp) throw new Error('expected player 0 (higher strength) to win the tie and score ' + k1vp + ' VP');
+        if (GameState.players[1].vp !== vpBefore1) throw new Error('expected player 1 to score nothing on this hex');
+
+        // Now make it a double-tie (equal strength too) on a fresh hex — nobody should score.
+        GameState.board.placedMarkers = [
+            { hexId: 'hex-t6', playerIndex: 0 },
+            { hexId: 'hex-t6', playerIndex: 1 }
+        ];
+        GameState.players[0].gear = [];
+        const vp0 = GameState.players[0].vp, vp1 = GameState.players[1].vp;
+        window.gameEngine.calculateFinalScores();
+        if (GameState.players[0].vp !== vp0 || GameState.players[1].vp !== vp1) {
+            throw new Error('expected no VP awarded on a full tie (cubes AND strength)');
+        }
+    });
+
+    check('General Kirk cube-move: full flow moves an opponent cube to an adjacent hex', () => {
+        const GameState = window.eval('GameState');
+        const GameCards = window.eval('GameCards');
+        const cp = GameState.players[0];
+        cp.leaders = [JSON.parse(JSON.stringify(GameCards.leaders.find(l => l.id === 'gen_kirk')))];
+        cp.resources = { yellow: 5, blue: 5, red: 5, green: 5 };
+        GameState.board.placedMarkers = [{ hexId: 'hex-k1', playerIndex: 1 }];
+        GameState.turn.currentPlayerIndex = 0;
+
+        GameState.turn.pendingChoice = {
+            type: 'kirkSelectCubeSource',
+            context: { message: 'test', afterRaidType: 'Kingdom' }
+        };
+        window.gameEngine.resolveKirkCubeSource('hex-k1');
+        const pc = GameState.turn.pendingChoice;
+        if (!pc || pc.type !== 'kirkSelectCubeDest') throw new Error('expected kirkSelectCubeDest after picking the source hex, got ' + JSON.stringify(pc));
+
+        const validDest = window.eval('GameEngine').HEX_ADJACENCY['hex-k1'][0];
+        window.gameEngine.resolveKirkCubeDest(validDest);
+
+        const moved = GameState.board.placedMarkers.find(m => m.playerIndex === 1);
+        if (!moved || moved.hexId !== validDest) throw new Error('expected the opponent cube to have moved to ' + validDest + ', markers: ' + JSON.stringify(GameState.board.placedMarkers));
+
+        const finalPc = GameState.turn.pendingChoice;
+        if (!finalPc || finalPc.type !== 'hexPlacement') throw new Error('expected the flow to proceed to hexPlacement afterward, got ' + JSON.stringify(finalPc));
+    });
+
+    check('player scoreboard shows each player\'s commanders-in-hand as color-coded tokens', () => {
+        const GameState = window.eval('GameState');
+        GameState.players[0].commanders = ['Black', 'Purple'];
+        window.gameUI.renderFullState();
+        const doc = window.document;
+        const rows = doc.querySelectorAll('#player-dock .player-score-row');
+        if (rows.length === 0) throw new Error('expected player scoreboard rows to render');
+        const dots = rows[0].querySelectorAll('.player-score-commanders .commander-mini');
+        if (dots.length !== 2) throw new Error('expected 2 commander-mini tokens for player 0, got ' + dots.length);
+        if (!dots[0].className.includes('cmd-black')) throw new Error('expected first token to be cmd-black, got ' + dots[0].className);
+        if (!dots[1].className.includes('cmd-purple')) throw new Error('expected second token to be cmd-purple, got ' + dots[1].className);
+    });
+
+    check('hex valid-choice highlight uses the translate-preserving pulse animation (regression check for the squished-hex bug)', () => {
+        const boardCss = fs.readFileSync(path.join(__dirname, 'css', 'board.css'), 'utf8');
+        const ruleMatch = boardCss.match(/\.hex-segment\.valid-choice\s*\{[^}]*\}/);
+        if (!ruleMatch) throw new Error('.hex-segment.valid-choice rule not found in css/board.css');
+        const rule = ruleMatch[0];
+        if (!/animation:\s*gold-pulse-board/.test(rule)) {
+            throw new Error('.hex-segment.valid-choice must animate with gold-pulse-board (which preserves translate(-50%,-50%)), not plain gold-pulse — got: ' + rule);
+        }
+    });
+
     await new Promise(r => setTimeout(r, 200));
 
     console.log('\n--- window errors captured ---');

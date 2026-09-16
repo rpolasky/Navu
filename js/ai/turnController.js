@@ -132,6 +132,15 @@ const AITurnController = {
             case 'hexPlacement':
                 GameEngine.resolveHexPlacement(choice);
                 break;
+            case 'kirkSelectCubeSource':
+                GameEngine.resolveKirkCubeSource(choice);
+                break;
+            case 'kirkSelectCubeOwner':
+                GameEngine.resolveKirkCubeOwner(choice);
+                break;
+            case 'kirkSelectCubeDest':
+                GameEngine.resolveKirkCubeDest(choice);
+                break;
             case 'strengthReward':
                 const threshold = pc.threshold;
                 if (threshold === 12 || threshold === 38) {

@@ -253,6 +253,54 @@
     color: #ccc;
 }
 
+/* Leader rank-conflict swap choice */
+.leader-conflict-grid {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.leader-conflict-option {
+    width: 220px;
+    border: 2px solid var(--gold);
+    border-radius: 10px;
+    background: #222;
+    padding: 14px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.leader-conflict-option:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(212, 175, 55, 0.5);
+}
+
+.leader-conflict-img {
+    width: 100%;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.leader-conflict-name {
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    color: var(--gold);
+    margin-bottom: 4px;
+}
+
+.leader-conflict-strength {
+    font-size: 0.85rem;
+    color: #fff;
+    margin-bottom: 6px;
+}
+
+.leader-conflict-ability {
+    font-size: 0.78rem;
+    color: #ccc;
+    line-height: 1.35;
+}
+
 /* Recurring choice-modal buttons — dismiss/cancel affordances used across
    several different pendingChoice types */
 .btn-dialog-close {
