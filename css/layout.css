@@ -1,0 +1,513 @@
+/* ============================================================
+   APP SHELL LAYOUT
+   The main regions of the page: board area, player dock, side
+   panel (preview/zoom/log), and the vertical action rail.
+
+   This is a desktop/laptop browser layout (not a mobile layout —
+   the game is not designed to be played on phones/tablets). The
+   goal here is that it survives normal desktop window resizing
+   without clipping content, unlike the original fixed 1600x900
+   itch.io-only layout.
+   ============================================================ */
+
+#game-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* TOP: Board Area - fills everything except the fixed action bar */
+#board-area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 15px;
+    padding: 15px;
+    background-color: var(--panel-dark);
+    border-bottom: 2px solid var(--gold);
+    overflow: hidden;
+}
+
+/* Player Dock (left panel) */
+#player-dock {
+    /* Was a fixed 350px; now scales between a usable minimum and a
+       sensible maximum so it doesn't starve the board on smaller
+       desktop windows. */
+    flex: 1 1 clamp(220px, 20vw, 350px);
+    min-width: 220px;
+    max-width: 350px;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid #333;
+    padding: 10px;
+    border-radius: 8px;
+    overflow-y: auto;
+}
+
+#player-dock-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.player-setup-section {
+    border-top: 1px solid #333;
+    padding-top: 6px;
+    margin-top: 4px;
+}
+
+.player-setup-section h4 {
+    font-family: 'Cinzel', serif;
+    color: var(--gold);
+    font-size: 0.8rem;
+    margin: 0 0 4px 0;
+}
+
+.starting-officers {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.starting-officers .card img {
+    width: 70px;
+    border-radius: 3px;
+}
+
+/* The old card/raid/leader market strip is no longer used; the market
+   is rendered directly on the board instead (see board.css). */
+#cards-market-area {
+    display: none;
+}
+
+/* Side Panel: contains card preview, board zoom, and the game log */
+#side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    flex: 0 1 clamp(260px, 18vw, 350px);
+    min-width: 260px;
+    max-width: 350px;
+    height: 100%;
+    flex-shrink: 1;
+}
+
+#card-preview {
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    gap: 6px;
+    color: #666;
+    font-size: 0.8rem;
+    min-height: 300px;
+}
+
+#card-preview img {
+    width: 100%;
+    max-width: 285px;
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.9);
+}
+
+/* Board Zoom Window */
+#board-zoom-container {
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid var(--gold);
+    border-radius: 8px;
+    padding: 8px;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#board-zoom-content {
+    width: 100%;
+    max-width: 270px;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #000;
+}
+
+#board-zoom-image {
+    position: absolute;
+    width: 800%;
+    /* 8x zoom */
+    height: auto;
+    pointer-events: none;
+    transform-origin: 0 0;
+    display: none;
+    /* Shown on hover via JS */
+}
+
+#game-log-container {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #444;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    overflow: hidden;
+    min-height: 0;
+}
+
+#game-log-container h3 {
+    font-size: 1rem;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 4px;
+}
+
+#game-log {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #ccc;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    word-wrap: break-word;
+}
+
+.log-entry {
+    padding: 4px 6px;
+    border-left: 2px solid var(--gold);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.log-entry.phase-change {
+    color: var(--gold);
+    font-weight: bold;
+    border-left-width: 4px;
+    margin-top: 8px;
+    background: rgba(212, 175, 55, 0.1);
+}
+
+/* Vertical Action Area (Sidebar) */
+#action-area {
+    flex: 0 0 clamp(160px, 12vw, 200px);
+    padding: 15px;
+    background: linear-gradient(to right, var(--red-dark), #111);
+    border-left: 2px solid var(--gold);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 20px;
+    overflow-y: hidden;
+}
+
+#action-area h1#phase-title {
+    font-size: 1.2rem;
+    margin: 0;
+    text-align: center;
+}
+
+/* Turn phase tracker — the 3 phases the engine actually models
+   (Activate / Place & Collect / Turn-in). "Place & Collect" reflects that
+   the code resolves the location's reward immediately on placement, rather
+   than as a separate step, even though the rulebook lists them as steps
+   2 and 3. */
+#phase-tracker {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+}
+
+.phase-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 2px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.phase-step.is-current {
+    opacity: 1;
+}
+
+.phase-step.is-done {
+    opacity: 0.75;
+}
+
+.phase-step-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: bold;
+    color: var(--gold);
+    background: transparent;
+}
+
+.phase-step.is-done .phase-step-dot {
+    background: var(--gold);
+    color: #1a1a1a;
+}
+
+.phase-step.is-current .phase-step-dot {
+    box-shadow: 0 0 8px var(--gold);
+    animation: location-pulse 2s infinite;
+}
+
+.phase-step-label {
+    font-size: 0.72rem;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.02em;
+    color: var(--text-light);
+    text-transform: uppercase;
+}
+
+.phase-step-connector {
+    width: 2px;
+    height: 10px;
+    background: rgba(212, 175, 55, 0.3);
+    margin-left: 9px;
+}
+
+#action-area p#phase-instruction {
+    font-size: 0.9rem;
+    margin: 0;
+    text-align: center;
+    color: #ccc;
+}
+
+#action-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+#action-controls button {
+    margin: 0;
+}
+
+.ai-turn-indicator {
+    color: var(--gold);
+    font-style: italic;
+    text-align: center;
+    font-size: 0.9rem;
+    animation: ai-thinking-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ai-thinking-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+/* Initial setup screen (player count / AI opponents) */
+.setup-group-ai {
+    margin-top: 20px;
+}
+
+.setup-ai-select-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+#ai-count {
+    flex: 1;
+    padding: 6px 8px;
+    background: #1a1a1a;
+    color: var(--text-light);
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    font-family: 'Lato', sans-serif;
+    cursor: pointer;
+}
+
+#ai-count:focus {
+    outline: none;
+    box-shadow: 0 0 6px rgba(212, 175, 55, 0.6);
+}
+
+.btn-start-ai {
+    background: linear-gradient(135deg, #4a0e0e, #8b0000);
+    color: var(--text-light);
+}
+
+.btn-start-ai:hover {
+    background: linear-gradient(135deg, #6a1414, #a80000);
+    box-shadow: 0 0 10px rgba(139, 0, 0, 0.8);
+}
+
+/* BOTTOM: Players Area - hidden, info moved to left dock */
+#players-area {
+    display: none;
+}
+
+.player-card {
+    flex: 1;
+    background: var(--panel-dark);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.3s;
+}
+
+.active-player {
+    border-color: var(--gold);
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+    background: #1a1a14;
+}
+
+.resources {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.resources span {
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #000;
+}
+
+/* Player dock resource/treasure/stat readouts */
+.res-coin {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    background: #1a1205;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+.res-coin-icon {
+    width: 18px;
+}
+
+.res-coin-count {
+    color: #ffd700;
+}
+
+.player-stat-line {
+    margin-top: 6px;
+    font-size: 0.9rem;
+}
+
+.player-stat-line .stat-strength {
+    color: #fff;
+}
+
+.player-stat-line .stat-influence {
+    color: #88ccff;
+}
+
+/* All-player scoreboard rows */
+.player-scoreboard-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 0.78rem;
+}
+
+.player-score-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: transparent;
+    border: 1px solid transparent;
+}
+
+.player-score-row.is-active {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: rgba(212, 175, 55, 0.4);
+}
+
+.player-score-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.player-score-name {
+    flex: 1;
+    color: #ccc;
+}
+
+.player-score-row.is-active .player-score-name {
+    color: #fff;
+    font-weight: bold;
+}
+
+.player-score-stat {
+    color: #fff;
+}
+
+.player-score-stat-influence {
+    color: #88ccff;
+}
+
+/* ============================================================
+   RESPONSIVE — desktop/laptop browser widths only.
+   This game targets desktop web browsers; these rules exist so a
+   resized or smaller laptop browser window degrades gracefully
+   instead of clipping content, not to support phone/tablet layouts.
+   ============================================================ */
+
+/* Compact desktop / small laptop windows */
+@media (max-width: 1400px) {
+    #board-area {
+        gap: 10px;
+        padding: 10px;
+    }
+
+    #player-dock {
+        flex-basis: 200px;
+        min-width: 200px;
+    }
+
+    #side-panel {
+        flex-basis: 220px;
+        min-width: 220px;
+    }
+
+    #action-area {
+        flex-basis: 150px;
+        padding: 10px;
+    }
+}
+
+/* Narrow desktop windows: let the shell scroll horizontally rather
+   than silently clipping content (previously body had overflow:hidden
+   with no fallback at all). */
+@media (max-width: 1150px) {
+    body {
+        overflow: auto;
+    }
+
+    #board-area {
+        overflow-x: auto;
+    }
+}

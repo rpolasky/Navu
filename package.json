@@ -1,0 +1,12 @@
+{
+  "name": "navu-treasures-of-the-fallen",
+  "version": "1.0.0",
+  "description": "Navu: Treasures of the Fallen — browser implementation. Static HTML/CSS/JS, no build step required to play; jsdom is only used by the optional smoke test.",
+  "private": true,
+  "scripts": {
+    "test": "node smoketest.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

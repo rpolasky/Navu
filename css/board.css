@@ -1,0 +1,281 @@
+/* ============================================================
+   GAME BOARD
+   The board image, clickable location hotspots, the Land of
+   Theos hex grid, and commander tokens.
+   ============================================================ */
+
+#locations-area {
+    position: relative;
+    width: 70vh;
+    height: 70vh;
+    flex-shrink: 0;
+    background: url('../assets/images/board/FINAL_NAVU_BOARD.png') center/contain no-repeat;
+    border-radius: 8px;
+    border: 1px solid #444;
+    margin: 0;
+    transition: transform 0.3s ease-out, z-index 0s;
+    z-index: 10;
+    transform-origin: center;
+}
+
+#locations-area:hover {
+    transform: scale(1.15) translateX(-50px) translateY(50px);
+    z-index: 50;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+}
+
+.location {
+    position: absolute;
+    width: 6%;
+    height: 7%;
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    z-index: 10;
+}
+
+.location:hover {
+    background: rgba(212, 175, 55, 0.2);
+    border: 2px solid var(--gold);
+    transform: scale(1.1);
+}
+
+.location.clickable {
+    border: 2px dashed rgba(212, 175, 55, 0.6);
+    animation: location-pulse 2s infinite;
+}
+
+@keyframes location-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(212, 175, 55, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(212, 175, 55, 0);
+    }
+}
+
+/* Location hotspot positions - calibrated against the board artwork.
+   meeple/token target ≈ 7% tall x 6% wide relative to the board container */
+#loc-favors {
+    top: 19.7%;
+    left: 5.5%;
+}
+
+#loc-commandCenter {
+    top: 5.2%;
+    left: 86.9%;
+}
+
+#loc-barracks {
+    top: 3.9%;
+    left: 13.5%;
+}
+
+#loc-archery {
+    top: 3.4%;
+    left: 26.7%;
+}
+
+#loc-docks {
+    top: 4.7%;
+    left: 39.5%;
+}
+
+#loc-assassins {
+    top: 5.1%;
+    left: 53.9%;
+}
+
+#loc-contractHall {
+    top: 20.2%;
+    left: 71.3%;
+}
+
+#loc-raidOrders {
+    top: 4.6%;
+    left: 69.7%;
+}
+
+#loc-influence {
+    top: 19.9%;
+    left: 87%;
+}
+
+#loc-armory {
+    top: 36.6%;
+    left: 86.6%;
+}
+
+#loc-blacksmith {
+    top: 37.0%;
+    left: 71.1%;
+}
+
+/* ============================================================
+   Commander tokens
+   Redesigned from a plain flat circle into a small shield/banner
+   marker so commanders read as pieces on the board rather than
+   generic UI dots. Color and border are set via a per-color CSS
+   class (added in ui.js) instead of inline styles, so this can be
+   restyled from CSS alone.
+   ============================================================ */
+.commander {
+    display: inline-block;
+    width: 26px;
+    height: 30px;
+    cursor: pointer;
+    flex-shrink: 0;
+    position: relative;
+    clip-path: polygon(50% 0%, 100% 20%, 100% 65%, 50% 100%, 0% 65%, 0% 20%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+    transition: transform 0.15s ease-out, filter 0.15s ease-out;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.commander:hover {
+    transform: scale(1.25) translateY(-2px);
+    filter: brightness(1.15);
+}
+
+.commander.cmd-yellow {
+    background: linear-gradient(160deg, #ffe066, var(--yellow-gem));
+}
+
+.commander.cmd-blue {
+    background: linear-gradient(160deg, #5fd4ff, var(--blue-gem));
+}
+
+.commander.cmd-red {
+    background: linear-gradient(160deg, #ff6b6b, var(--red-gem));
+}
+
+.commander.cmd-green {
+    background: linear-gradient(160deg, #7be07b, var(--green-gem));
+}
+
+.commander.cmd-black {
+    background: linear-gradient(160deg, #555, #1a1a1a);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.commander.cmd-purple {
+    background: linear-gradient(160deg, #b483f0, #8a2be2);
+}
+
+.commander.cmd-white {
+    background: linear-gradient(160deg, #ffffff, #dcdcdc);
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Board-positioned market cards (gear / raids / leaders drawn on the board) */
+.board-market-card {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    width: 12.7%;
+    z-index: 15;
+    cursor: pointer;
+    transition: z-index 0s;
+}
+
+.board-market-card img {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+    display: block;
+    transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.board-market-card:hover img {
+    box-shadow: 0 4px 18px rgba(212, 175, 55, 0.7);
+    transform: scale(1.1);
+}
+
+@keyframes gold-pulse-board {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
+    }
+
+    50% {
+        transform: translate(-50%, -50%) scale(1.06);
+        box-shadow: 0 0 15px 5px rgba(212, 175, 55, 0.4);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
+    }
+}
+
+.board-market-card.selectable-card {
+    animation: gold-pulse-board 1.5s infinite;
+    z-index: 20;
+}
+
+.board-market-card.selectable-card:hover img {
+    transform: scale(1.12);
+}
+
+/* Land of Theos hex grid */
+#hex-grid-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    z-index: 25;
+    pointer-events: none;
+}
+
+.hex-segment {
+    position: absolute;
+    width: 9%;
+    height: 12%;
+    background: rgba(255, 255, 255, 0.05);
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    pointer-events: auto;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    transform: translate(-50%, -50%);
+}
+
+.hex-segment:hover {
+    background: rgba(212, 175, 55, 0.3);
+    box-shadow: 0 0 15px var(--gold);
+    z-index: 30;
+}
+
+.hex-segment.valid-choice {
+    animation: gold-pulse 1.3s infinite;
+    background: rgba(212, 175, 55, 0.25);
+    border: 2px solid var(--gold);
+}
+
+.hex-segment.invalid-choice {
+    cursor: not-allowed;
+    opacity: 0.3;
+}
+
+.hex-marker {
+    width: 14px;
+    height: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+    margin: 2px;
+}

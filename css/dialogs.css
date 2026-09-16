@@ -1,0 +1,402 @@
+/* ============================================================
+   DIALOGS
+   Two related but distinct systems, both using the same gold/dark
+   "war council" visual language:
+
+   1. #choice-overlay — in-game choices with game-specific buttons
+      (resource selection, commander action color, etc), driven by
+      GameState.turn.pendingChoice.
+   2. #app-dialog-overlay — a general-purpose themed replacement for
+      the browser's native alert()/confirm(), driven by js/ui/dialogs.js.
+   ============================================================ */
+
+/* ---------- 1. In-game choice overlay ---------- */
+#choice-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+.choice-modal {
+    background: #1a1a1a;
+    border: 2px solid var(--gold);
+    border-radius: 12px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 0 30px rgba(212, 175, 55, 0.3);
+    max-width: 400px;
+}
+
+.choice-modal h3 {
+    margin-top: 0;
+    color: var(--gold);
+    font-size: 1.5rem;
+}
+
+.choice-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.choice-buttons button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1rem;
+    transition: transform 0.2s, filter 0.2s;
+}
+
+.choice-buttons button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.2);
+}
+
+.res-btn-y {
+    background: var(--yellow-gem);
+    color: black;
+    border: 1px solid #990;
+}
+
+.res-btn-b {
+    background: var(--blue-gem);
+    color: white;
+    border: 1px solid #099;
+}
+
+.res-btn-r {
+    background: var(--red-gem);
+    color: white;
+    border: 1px solid #900;
+}
+
+.res-btn-g {
+    background: var(--green-gem);
+    color: white;
+    border: 1px solid #060;
+}
+
+.res-btn-y:hover,
+.res-btn-b:hover,
+.res-btn-r:hover,
+.res-btn-g:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+/* "Select Action Color" buttons. Uses the same per-color identity as the
+   board commander tokens (css/board.css .commander.cmd-*) instead of the
+   previous res-${color.charAt(0)} scheme, which collided ("Black" and
+   "Blue" both start with 'b') and had no color at all for "Purple". */
+.choice-color-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.choice-color-btn {
+    padding: 10px 20px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 5px;
+    border: none;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    font-family: 'Cinzel', serif;
+    transition: transform 0.15s, filter 0.15s;
+}
+
+.choice-color-btn:hover:not(.is-disabled) {
+    transform: translateY(-2px);
+    filter: brightness(1.15);
+}
+
+.choice-color-btn.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.choice-color-btn.cmd-yellow {
+    background: var(--yellow-gem);
+    color: #1a1a1a;
+    text-shadow: none;
+}
+
+.choice-color-btn.cmd-blue {
+    background: var(--blue-gem);
+}
+
+.choice-color-btn.cmd-red {
+    background: var(--red-gem);
+}
+
+.choice-color-btn.cmd-green {
+    background: var(--green-gem);
+}
+
+.choice-color-btn.cmd-black {
+    background: #2a2a2a;
+    border: 1px solid #555;
+}
+
+.choice-color-btn.cmd-purple {
+    background: #8a2be2;
+}
+
+.choice-color-btn.cmd-white {
+    background: #e8e8e8;
+    color: #1a1a1a;
+    text-shadow: none;
+    border: 1px solid #999;
+}
+
+/* Misc recurring layout/text helpers used across pendingChoice modal bodies */
+.dialog-hint-text {
+    font-size: 0.8em;
+    color: #aaa;
+}
+
+.dialog-btn-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.dialog-btn-row-mt {
+    margin-top: 20px;
+}
+
+.dialog-btn-row-mt-sm {
+    margin-top: 10px;
+}
+
+.res-choice-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.choice-buttons.vertical {
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-officer-ability {
+    padding: 15px;
+    font-weight: bold;
+    border-radius: 8px;
+    border: 2px solid #555;
+    background: #444;
+    color: white;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    transition: background 0.2s;
+}
+
+.btn-officer-ability:hover {
+    background: #555;
+}
+
+.btn-gold-compact {
+    padding: 10px;
+}
+
+.choice-modal-wide {
+    max-width: 800px;
+}
+
+.favor-select-grid {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.favor-select-card {
+    width: 200px;
+    border: 2px solid gold;
+    border-radius: 10px;
+    background: #222;
+    padding: 10px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.favor-select-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(212, 175, 55, 0.4);
+}
+
+.favor-select-name {
+    font-weight: bold;
+    color: gold;
+    margin-bottom: 5px;
+}
+
+.favor-select-desc {
+    font-size: 0.9em;
+    color: #ccc;
+}
+
+/* Recurring choice-modal buttons — dismiss/cancel affordances used across
+   several different pendingChoice types */
+.btn-dialog-close {
+    margin-top: 10px;
+}
+
+.btn-dialog-close-lg {
+    margin-top: 20px;
+}
+
+.btn-cancel-action {
+    background: #552222;
+    border-color: #884444;
+}
+
+.btn-skip-close {
+    margin-top: 14px;
+    opacity: 0.6;
+    font-size: 0.75rem;
+}
+
+/* ---------- 2. Themed alert/confirm replacement ---------- */
+#app-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(3px);
+    z-index: 10000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    animation: dialog-fade-in 0.15s ease-out;
+}
+
+@keyframes dialog-fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.app-dialog {
+    background: #1a1a1a;
+    border: 2px solid var(--gold);
+    border-radius: 12px;
+    padding: 24px 28px;
+    text-align: left;
+    box-shadow: 0 0 40px rgba(212, 175, 55, 0.35);
+    max-width: 440px;
+    min-width: 300px;
+    animation: dialog-pop-in 0.18s ease-out;
+}
+
+@keyframes dialog-pop-in {
+    from {
+        transform: scale(0.94);
+        opacity: 0;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.app-dialog-title {
+    font-family: 'Cinzel', serif;
+    color: var(--gold);
+    font-size: 1.25rem;
+    margin: 0 0 12px 0;
+    border-bottom: 1px solid #333;
+    padding-bottom: 8px;
+}
+
+.app-dialog-body {
+    color: var(--text-light);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+.app-dialog-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.app-dialog-btn {
+    padding: 9px 18px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Cinzel', serif;
+    font-weight: bold;
+    font-size: 0.9rem;
+    transition: transform 0.15s, filter 0.15s;
+}
+
+.app-dialog-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.15);
+}
+
+.app-dialog-btn.primary {
+    background: var(--gold);
+    color: #1a1a1a;
+}
+
+.app-dialog-btn.secondary {
+    background: #333;
+    color: var(--text-light);
+    border: 1px solid #555;
+}
+
+/* Game-over results panel, shown via the same dialog system */
+.app-dialog.game-over {
+    max-width: 480px;
+}
+
+.game-over-scores {
+    list-style: none;
+    margin: 12px 0 0 0;
+    padding: 0;
+}
+
+.game-over-scores li {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-left: 3px solid #444;
+    background: rgba(255, 255, 255, 0.03);
+    margin-bottom: 4px;
+    border-radius: 3px;
+}
+
+.game-over-scores li.winner {
+    border-left-color: var(--gold);
+    background: rgba(212, 175, 55, 0.12);
+    font-weight: bold;
+    color: var(--gold);
+}
