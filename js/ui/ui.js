@@ -399,16 +399,25 @@ const GameUI = {
     },
 
     // ── Influence track: 5 player rows on the board, each a 13-space (0-12)
-    // zigzag (even positions on the row's lower line, odd on its upper line —
-    // matches the board art exactly, coordinates measured directly from it).
+    // zigzag (even positions on the row's lower line, odd on its upper line).
     // Percentages are relative to #locations-area, same space .location/
     // .hex-segment/.commander already use.
+    //
+    // Coordinates were re-measured after the previous two passes both turned
+    // out to be off (confirmed by screenshots showing the disc consistently
+    // left of its label). Both earlier passes relied on eyeballing a labeled
+    // grid overlay, which wasn't precise enough. This pass instead
+    // auto-detects the actual white number-label pixels ("0","3","6","9","12")
+    // on the board art directly and clusters/averages them, removing manual
+    // reading error entirely, then was verified by drawing the result back
+    // onto the real board — every one of the 5×13 positions landed dead-center
+    // on its icon before this was adopted.
     INFLUENCE_TRACK: {
-        baseX: 5.99,   // x of position 0
-        xStep: 1.95,   // x increment per position
-        baseYBottom: 74.01, // y of P1's lower zigzag line (even positions)
-        yZigzag: 1.95,      // how much higher the upper line (odd positions) sits
-        rowStep: 4.76       // y increment from one player's row to the next
+        baseX: 6.59,   // x of position 0
+        xStep: 2.17,   // x increment per position
+        baseYBottom: 74.96, // y of P1's lower zigzag line (even positions)
+        yZigzag: 2.6,       // how much higher the upper line (odd positions) sits
+        rowStep: 5.5        // y increment from one player's row to the next
     },
 
     _getInfluencePos(value, playerRowIndex) {

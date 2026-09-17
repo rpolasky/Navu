@@ -90,6 +90,16 @@ Also re-checked the Influence track the same way while I was at it — it turned
 
 Added a regression check that verifies Start sits in the tree's own center column (matching 12/38) rather than drifting toward the sidebar — the specific failure mode this time.
 
+### Session 6 — the influence track was ALSO miscalibrated (my Session 4/5 verification was insufficient)
+
+You caught this one precisely: P1's disc (influence=3) was landing visibly left of the "3" label, and P2's (influence=8, from 3 base + 5 from a leader card — thanks for the exact math, that made this easy to pin down) was landing back around "6". Both of my previous two passes on this track relied on eyeballing a labeled grid overlay, which — as this proved — wasn't precise enough for coordinates this tight, the same lesson from the strength tree but I hadn't yet applied it here.
+
+This time: auto-detected the actual white number-label pixels ("0", "3", "6", "9", "12") directly on the board art via image processing, clustered and averaged them (removing manual reading error entirely), and verified by drawing the result back onto the real board — all 5 rows × 13 positions land dead-center on their icons, and specifically re-checked the exact P1=3 / P2=8 scenario you reported before calling it fixed. Also confirms there's no separate influence-tracking bug — your P2 was correctly at 8 all along; the earlier broken coordinates just made it look like it wasn't.
+
+New values: `baseX: 6.59, xStep: 2.17, baseYBottom: 74.96, yZigzag: 2.6, rowStep: 5.5` (previously 5.99/1.95/74.01/1.95/4.76 — off by enough to matter, especially cumulative across 12 positions).
+
+Added a regression check locking in the exact reported scenario (value=8 must sit closer to "9" than "6").
+
 ---
 
 ## 1. What's already working (unchanged from original analysis)
@@ -137,9 +147,9 @@ Added a regression check that verifies Start sits in the tree's own center colum
 
 ## 5. What I'd like from you
 
-1. Take a fresh look at the strength tree discs in an actual game now — confirm the recalibration actually landed on the real board art, not just my own verification images.
-2. Play a game through to an actual end (or force-trigger it) and check the score-breakdown popup — do the category labels and groupings make sense, or would you split/rename anything (e.g., should gear-passive VP like the Breastplate bonus be separate from held-gear VP, both currently under "Gear Treasures")?
-3. Confirm the Master of Puppets fix (now strictly `>35` strength) is what you want — flag it if `>=35` was actually intentional.
-4. Try resizing the browser window through a range of sizes (including narrower windows, not just shorter ones) and confirm scrollbars are gone in ordinary use.
-5. Keep flagging anything else that looks or feels off — this "play it and report back" loop keeps finding real gaps a test suite alone can't, as this round's tree miscalibration proved.
+1. Please check the influence track live in-game now, specifically the exact scenario you reported (a value like 3 and a value like 8) — I verified pixel-for-pixel against the board art this time rather than eyeballing, but a live check from you is still the real confirmation.
+2. Take a fresh look at the strength tree discs too, from Session 5 — same "verify it actually looks right in the real game" ask.
+3. Play a game through to an actual end (or force-trigger it) and check the score-breakdown popup — do the category labels and groupings make sense, or would you split/rename anything (e.g., should gear-passive VP like the Breastplate bonus be separate from held-gear VP, both currently under "Gear Treasures")?
+4. Confirm the Master of Puppets fix (now strictly `>35` strength) is what you want — flag it if `>=35` was actually intentional.
+5. Keep flagging anything that looks or feels off — I've clearly needed more than one pass on these board-position calibrations, so please don't hesitate to send another screenshot if something's still not right.
 

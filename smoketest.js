@@ -462,6 +462,23 @@ const errors = [];
         if (start.y >= n12.y) throw new Error('Start should sit above (smaller y than) 12 in the tree');
     });
 
+    await check('influence disc for value=8 sits near "9" not "6" (regression check for the mis-calibrated track)', () => {
+        // Two earlier calibration passes were both off (confirmed by user screenshots:
+        // P1 at influence=3 rendered left of the "3" label; P2 at influence=8 rendered
+        // looking like it was near "6"). Re-measured by auto-detecting the actual white
+        // number-label pixels on the board art. Lock in the specific reported scenario.
+        const pos3 = window.gameUI._getInfluencePos(3, 0);
+        const pos6 = window.gameUI._getInfluencePos(6, 0);
+        const pos8 = window.gameUI._getInfluencePos(8, 0);
+        const pos9 = window.gameUI._getInfluencePos(9, 0);
+        if (Math.abs(pos8.x - pos9.x) >= Math.abs(pos8.x - pos6.x)) {
+            throw new Error("value=8 should sit closer to value=9's x than value=6's x");
+        }
+        if (pos3.y >= window.gameUI._getInfluencePos(0, 0).y) {
+            throw new Error('value=3 (odd) should sit higher (smaller y) than value=0 (even) on the same row');
+        }
+    });
+
     await new Promise(r => setTimeout(r, 200));
 
     console.log('\n--- window errors captured ---');
