@@ -404,9 +404,9 @@ const GameUI = {
     // Percentages are relative to #locations-area, same space .location/
     // .hex-segment/.commander already use.
     INFLUENCE_TRACK: {
-        baseX: 5.49,   // x of position 0
+        baseX: 5.99,   // x of position 0
         xStep: 1.95,   // x increment per position
-        baseYBottom: 74.14, // y of P1's lower zigzag line (even positions)
+        baseYBottom: 74.01, // y of P1's lower zigzag line (even positions)
         yZigzag: 1.95,      // how much higher the upper line (odd positions) sits
         rowStep: 4.76       // y increment from one player's row to the next
     },
@@ -424,21 +424,29 @@ const GameUI = {
     // at a single "Start" node, forks into two paths at each of the 7 real
     // strength thresholds (5/12/18/25/32/38/45; 12 and 38 are single center
     // nodes where the two paths rejoin), matching checkStrengthThresholds in
-    // engine.js. Coordinates measured directly from the board art.
+    // engine.js.
+    //
+    // Coordinates below were re-measured after the first pass turned out to
+    // be significantly off (verified by a user screenshot showing discs
+    // nowhere near "Start"). Re-derived using iterative centroid convergence
+    // on the actual board art's dark hex-icon pixels, then hand-verified by
+    // drawing the result back onto the real image — every node landed
+    // cleanly on its hex before these values were adopted.
     STRENGTH_TREE_NODES: [
-        { value: 0, x: 83.05, y: 73.29 },
-        { value: 5, x: 80.14, y: 75.24 },
-        { value: 5, x: 85.94, y: 75.24 },
-        { value: 12, x: 83.05, y: 76.89 },
-        { value: 18, x: 80.14, y: 78.69 },
-        { value: 18, x: 85.94, y: 78.69 },
-        { value: 25, x: 80.14, y: 81.69 },
-        { value: 25, x: 85.94, y: 81.69 },
-        { value: 32, x: 80.14, y: 84.69 },
-        { value: 32, x: 85.94, y: 84.69 },
-        { value: 38, x: 83.05, y: 86.34 },
-        { value: 45, x: 80.14, y: 88.00 },
-        { value: 45, x: 85.94, y: 88.00 }
+        { value: 0, x: 86.3, y: 73.8 },
+        { value: 5, x: 81.6, y: 76.09 },
+        { value: 5, x: 91.0, y: 76.09 },
+        { value: 12, x: 86.3, y: 78.38 },
+        { value: 18, x: 81.6, y: 80.67 },
+        { value: 18, x: 91.0, y: 80.67 },
+        { value: 25, x: 81.6, y: 82.96 },
+        { value: 25, x: 91.0, y: 82.96 },
+        { value: 32, x: 81.6, y: 85.25 },
+        { value: 32, x: 91.0, y: 85.25 },
+        { value: 38, x: 86.3, y: 87.54 },
+        { value: 45, x: 81.6, y: 89.83 },
+        { value: 45, x: 91.0, y: 89.83 },
+        { value: 45, x: 86.3, y: 92.12 }
     ],
 
     // Snaps a strength value down to the highest real checkpoint it has

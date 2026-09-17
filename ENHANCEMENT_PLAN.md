@@ -80,6 +80,16 @@
 - Verified the coordinate math by drawing the computed positions back onto the actual board image before writing any rendering code (see the overlay check — every circle landed on its printed space).
 - No wooden-disc art asset exists in the project, so these are CSS-built tokens (wood-tone gradient + a center dot in the player's own color), not real art.
 
+### Session 5 — strength tree recalibration (the discs really were misplaced)
+
+You caught a real bug: the strength tree's coordinates from Session 4 were significantly off — a screenshot showed the disc sitting well away from "Start," near the unrelated "Leader" bonus icon. My original measurement process (eyeballing a small, scaled-down reference image) turned out to be unreliable at the precision this needed.
+
+Re-measured properly this time: used iterative centroid convergence on the actual board art's dark hex-icon pixels (a small search window repeatedly re-centers itself on the darkest cluster it finds, self-correcting regardless of how far off the starting guess is), then — critically — verified the result by drawing the new coordinates back onto the real board image and confirming every single node (Start, both 5s, 12, both 18s, both 25s, both 32s, 38, both 45s, and the third bottom-center 45) visibly lands on its hex before touching any code. The root issue: my first pass had both an X and Y calibration error large enough (several percent) to miss hexes entirely, whereas this pass nails all 14 nodes.
+
+Also re-checked the Influence track the same way while I was at it — it turned out to be correct (the P1 disc you can see on "3" in your screenshot really was accurate; what looked like a P2 discrepancy was a value of 7, not 8, correctly rendered — a data question, not a rendering bug). Applied only a small (<1%) refinement there since it was already close.
+
+Added a regression check that verifies Start sits in the tree's own center column (matching 12/38) rather than drifting toward the sidebar — the specific failure mode this time.
+
 ---
 
 ## 1. What's already working (unchanged from original analysis)
@@ -127,9 +137,9 @@
 
 ## 5. What I'd like from you
 
-1. Play a game through to an actual end (or force-trigger it) and check the new score-breakdown popup — do the category labels and groupings make sense, or would you split/rename anything (e.g., should gear-passive VP like the Breastplate bonus be separate from held-gear VP, both currently under "Gear Treasures")?
-2. Take a look at the Influence and Strength track discs in an actual game — I verified the coordinates against the board art directly, but a live look is still the real test.
-3. Confirm the Master of Puppets fix (now strictly `>35` strength) is what you want — flag it if the `>=35` behavior was actually intentional.
+1. Take a fresh look at the strength tree discs in an actual game now — confirm the recalibration actually landed on the real board art, not just my own verification images.
+2. Play a game through to an actual end (or force-trigger it) and check the score-breakdown popup — do the category labels and groupings make sense, or would you split/rename anything (e.g., should gear-passive VP like the Breastplate bonus be separate from held-gear VP, both currently under "Gear Treasures")?
+3. Confirm the Master of Puppets fix (now strictly `>35` strength) is what you want — flag it if `>=35` was actually intentional.
 4. Try resizing the browser window through a range of sizes (including narrower windows, not just shorter ones) and confirm scrollbars are gone in ordinary use.
-5. Keep flagging anything else that looks or feels off — this "play it and report back" loop keeps finding real gaps a test suite alone can't.
+5. Keep flagging anything else that looks or feels off — this "play it and report back" loop keeps finding real gaps a test suite alone can't, as this round's tree miscalibration proved.
 

@@ -448,6 +448,20 @@ const errors = [];
         if (!blocks[0].classList.contains('winner')) throw new Error('expected the first (highest-VP) block to be marked as winner');
     });
 
+    await check('strength tree Start node is well-clear of the "Leader" bonus icon area (regression check for the mis-calibrated tree)', () => {
+        // The very first calibration of this tree had Start's x around 83%, which
+        // turned out (confirmed against a real screenshot) to land off the hex
+        // entirely, near the unrelated "Leader" bonus icon to its left. Start's
+        // real position sits in the tree's own center column, matching 12/38/45B.
+        const nodes = window.gameUI.STRENGTH_TREE_NODES;
+        const start = nodes.find(n => n.value === 0);
+        const n12 = nodes.find(n => n.value === 12);
+        const n38 = nodes.find(n => n.value === 38);
+        if (Math.abs(start.x - n12.x) > 0.5) throw new Error("Start should share the center column's x with 12, got Start.x=" + start.x + " vs 12.x=" + n12.x);
+        if (Math.abs(start.x - n38.x) > 0.5) throw new Error("Start should share the center column's x with 38, got Start.x=" + start.x + " vs 38.x=" + n38.x);
+        if (start.y >= n12.y) throw new Error('Start should sit above (smaller y than) 12 in the tree');
+    });
+
     await new Promise(r => setTimeout(r, 200));
 
     console.log('\n--- window errors captured ---');
